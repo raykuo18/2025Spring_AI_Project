@@ -1,0 +1,12 @@
+[Event "Mini Game"]
+[Site "Example"]
+[Date "2023.03.01"]
+[Round "-"]
+[White "Alice"]
+[Black "Bob"]
+[Result "1-0"]
+
+1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 4. Ba4 Nf6 5. O-O Be7 6. Re1 b5 7. Bb3 d6 8. c3 O-O 9. h3
+Nb8 10. d4 Nbd7 11. Nbd2 Bb7 12. Bc2 Re8 13. Nf1 Bf8 14. Ng3 g6 15. a4 c5 16. d5 c4
+17. Nh2 Nc5 18. Be3 Qc7 19. Ng4 Nxg4 20. Qxg4 Bc8 21. Qh4 Be7 22. Qh6 Qd8 23. axb5
+axb5 24. Rxa8 Bf8 25. Qg5 Qxg5 26. Bxg5 Bb7 27. Rxe8 b4 28. Bh6 b3 29. Rxf8# 1-0
