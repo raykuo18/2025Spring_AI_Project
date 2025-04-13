@@ -6,7 +6,7 @@ import requests
 from stockfish import Stockfish
 
 # ====== Configuration ======
-HF_API_KEY = "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"  # Get from https://huggingface.co/settings/tokens
+HF_API_KEY = ""  # Get from https://huggingface.co/settings/tokens
 MODEL_ID = "mistralai/Mistral-7B-Instruct-v0.2"
 PGN_PATH = "short_example.pgn"
 NUM_SAMPLES = 1
