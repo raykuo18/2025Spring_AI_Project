@@ -1,4 +1,4 @@
-# 2025SSpring_AI_Project
+# 2025Spring_AI_Project
 
 Generate the dataset:
 1. Generate hugging face api key and replace HF_API_KEY in src/generate_chess_dataset_hf.py
