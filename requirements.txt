@@ -3,3 +3,14 @@ accelerate
 datasets
 python-chess
 stockfish
+ctransformers
+torch
+openai
+pandas
+nltk
+rouge-score
+tqdm
+bert-score
+peft
+bitsandbytes
+numpy
