@@ -1,8 +1,5 @@
 # 2025Spring_AI_Project
 
-Generate the dataset:
-1. Generate hugging face api key and replace HF_API_KEY in src/generate_chess_dataset_hf.py
-2. Download stockfish and replace STOCKFISH_PATH in src/generate_chess_dataset_hf.py
-3. Install required python package: `pip install -r requirements.txt`
-4. `cd src`
-5. `python3 generate_chess_dataset_hf.`
+Some issues:
+1. pip uninstall ctransformers --yes
+  CT_METAL=1 pip install ctransformers --no-binary ctransformers
