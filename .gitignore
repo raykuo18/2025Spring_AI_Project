@@ -3,3 +3,5 @@
 **.pptx
 **.potx
 api_key/**
+
+.env
