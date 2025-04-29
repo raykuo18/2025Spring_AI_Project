@@ -15,12 +15,9 @@ from PyQt5.QtSvg import QSvgRenderer  # for rendering SVGs
 
 from typing import Any, Dict, List, Optional
 from PyQt5.QtGui import QPaintEvent, QMouseEvent, QCloseEvent
-
-import math
 from math import atan2, cos, sin, pi
 
 # TODO:
-# - When clicking new game, reset arrows
 # - Use LLM to play a game, take inputs as UCI
 # - Board state: FEN
 # - start game from some state
