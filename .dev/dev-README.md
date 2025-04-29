@@ -2,6 +2,8 @@
 
 A small CLI utility to create Python virtual environments with either `conda` or the built-in `venv` module. Supports creating environments by **path** or by **name**, and optionally installing a specific Python version (for `conda`).
 
+This utility installs the necessary packages/libraries needed for development, but not to necessarily run the main project compononents.
+
 ---
 
 ## Prerequisites
@@ -15,14 +17,18 @@ A small CLI utility to create Python virtual environments with either `conda` or
 
 ```bash
 # Clone your project (if not already)
-git clone <project>
-cd <project>/.dev
+git clone <project-path>
+cd <project>/.dev # change directory to .dev
 
-# Make script executable (UNIX) and run
+# Make script executable (UNIX) and create virtual env in the
+# directory .env, located at project level
 chmod +x create_env.py
 ./create_env.py --conda --path=$(pwd)/../.env --python-version=3.11 # Recommended
 
-# (Optional) install dev-requirements for other tools in your project
+# Activate environment
+conda activate <project-path>/.env
+
+# Install dev-requirements for other tools in your project
 pip install -r dev-requirements.txt
 ```
 
