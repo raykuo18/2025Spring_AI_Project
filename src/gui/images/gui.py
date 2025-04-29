@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Minimal viable example of a chess GUI using PyQt5 and python-chess."""
+"""Minimal viable example of a chess GUI using PyQt5 and python-chess.
+
+To run this example:
+
+./gui.py
+"""
 import sys
 import chess
 import chess.engine
@@ -12,6 +17,16 @@ import math
 from math import atan2, cos, sin, pi
 
 # TODO:
+# - When clicking new game, reset arrows
+# - Use LLM to play a game, take inputs as UCI
+# - Board state: FEN
+# - start game from some state
+# - take UCI input to make a move
+# - take FEN stae input to start from some state
+#
+# - Inputs: user moves (model replace user), board state, stockfish (internal engine) moves
+# - Outputs: latest board state (after both user and stockfish moves)
+#
 # - add option to change boards
 # - add option to change to black/white
 # - add window to show moves played
