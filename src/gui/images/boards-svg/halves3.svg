@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!--
+	Három félsakktábla
+	Felhasználási feltételek: Nevezd meg! - Így add tovább! (Creative Commons)
+	Uray M. János
+	2014
+-->
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="656" height="960" viewBox="-328 -632 656 960" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+	
+	<!-- keret -->
+	<rect fill="none" stroke="#666" stroke-width="16" stroke-linejoin="miter" x="-320" y="-320" width="640" height="640"/>
+	<path fill="none" stroke="#666" stroke-width="16" stroke-linejoin="miter" stroke-linecap="butt" d="M +256,-368 L +256,-624 L -256,-624 L -256,-368"/>
+	
+	<!-- mezők -->
+	<g>
+		<rect fill="#FFF" x="-320" y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="-240" y="-320" width="80" height="80"/>
+		<rect fill="#FFF" x="-160" y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="-80"  y="-320" width="80" height="80"/>
+		<rect fill="#FFF" x="0"    y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="+80"  y="-320" width="80" height="80"/>
+		<rect fill="#FFF" x="+160" y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="+240" y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="-320" y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="-240" y="-240" width="80" height="80"/>
+		<rect fill="#AAA" x="-160" y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="-80"  y="-240" width="80" height="80"/>
+		<rect fill="#AAA" x="0"    y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="+80"  y="-240" width="80" height="80"/>
+		<rect fill="#AAA" x="+160" y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="+240" y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="-320" y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="-240" y="-160" width="80" height="80"/>
+		<rect fill="#FFF" x="-160" y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="-80"  y="-160" width="80" height="80"/>
+		<rect fill="#FFF" x="0"    y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="+80"  y="-160" width="80" height="80"/>
+		<rect fill="#FFF" x="+160" y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="+240" y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="-320" y="-80"  width="80" height="80"/>
+		<rect fill="#FFF" x="-240" y="-80"  width="80" height="80"/>
+		<rect fill="#AAA" x="-160" y="-80"  width="80" height="80"/>
+		<rect fill="#FFF" x="-80"  y="-80"  width="80" height="80"/>
+		<rect fill="#AAA" x="0"    y="-80"  width="80" height="80"/>
+		<rect fill="#FFF" x="+80"  y="-80"  width="80" height="80"/>
+		<rect fill="#AAA" x="+160" y="-80"  width="80" height="80"/>
+		<rect fill="#FFF" x="+240" y="-80"  width="80" height="80"/>
+	</g>
+	<g transform="translate(0, 320)">
+		<rect fill="#FFF" x="-320" y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="-240" y="-320" width="80" height="80"/>
+		<rect fill="#FFF" x="-160" y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="-80"  y="-320" width="80" height="80"/>
+		<rect fill="#FFF" x="0"    y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="+80"  y="-320" width="80" height="80"/>
+		<rect fill="#FFF" x="+160" y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="+240" y="-320" width="80" height="80"/>
+		<rect fill="#AAA" x="-320" y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="-240" y="-240" width="80" height="80"/>
+		<rect fill="#AAA" x="-160" y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="-80"  y="-240" width="80" height="80"/>
+		<rect fill="#AAA" x="0"    y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="+80"  y="-240" width="80" height="80"/>
+		<rect fill="#AAA" x="+160" y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="+240" y="-240" width="80" height="80"/>
+		<rect fill="#FFF" x="-320" y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="-240" y="-160" width="80" height="80"/>
+		<rect fill="#FFF" x="-160" y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="-80"  y="-160" width="80" height="80"/>
+		<rect fill="#FFF" x="0"    y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="+80"  y="-160" width="80" height="80"/>
+		<rect fill="#FFF" x="+160" y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="+240" y="-160" width="80" height="80"/>
+		<rect fill="#AAA" x="-320" y="-80"  width="80" height="80"/>
+		<rect fill="#FFF" x="-240" y="-80"  width="80" height="80"/>
+		<rect fill="#AAA" x="-160" y="-80"  width="80" height="80"/>
+		<rect fill="#FFF" x="-80"  y="-80"  width="80" height="80"/>
+		<rect fill="#AAA" x="0"    y="-80"  width="80" height="80"/>
+		<rect fill="#FFF" x="+80"  y="-80"  width="80" height="80"/>
+		<rect fill="#AAA" x="+160" y="-80"  width="80" height="80"/>
+		<rect fill="#FFF" x="+240" y="-80"  width="80" height="80"/>
+	</g>
+	<g transform="translate(0, -368)">
+		<rect fill="#FFF" x="-256" y="-256" width="64" height="64"/>
+		<rect fill="#AAA" x="-192" y="-256" width="64" height="64"/>
+		<rect fill="#FFF" x="-128" y="-256" width="64" height="64"/>
+		<rect fill="#AAA" x="-64"  y="-256" width="64" height="64"/>
+		<rect fill="#FFF" x="0"    y="-256" width="64" height="64"/>
+		<rect fill="#AAA" x="+64"  y="-256" width="64" height="64"/>
+		<rect fill="#FFF" x="+128" y="-256" width="64" height="64"/>
+		<rect fill="#AAA" x="+192" y="-256" width="64" height="64"/>
+		<rect fill="#AAA" x="-256" y="-192" width="64" height="64"/>
+		<rect fill="#FFF" x="-192" y="-192" width="64" height="64"/>
+		<rect fill="#AAA" x="-128" y="-192" width="64" height="64"/>
+		<rect fill="#FFF" x="-64"  y="-192" width="64" height="64"/>
+		<rect fill="#AAA" x="0"    y="-192" width="64" height="64"/>
+		<rect fill="#FFF" x="+64"  y="-192" width="64" height="64"/>
+		<rect fill="#AAA" x="+128" y="-192" width="64" height="64"/>
+		<rect fill="#FFF" x="+192" y="-192" width="64" height="64"/>
+		<rect fill="#FFF" x="-256" y="-128" width="64" height="64"/>
+		<rect fill="#AAA" x="-192" y="-128" width="64" height="64"/>
+		<rect fill="#FFF" x="-128" y="-128" width="64" height="64"/>
+		<rect fill="#AAA" x="-64"  y="-128" width="64" height="64"/>
+		<rect fill="#FFF" x="0"    y="-128" width="64" height="64"/>
+		<rect fill="#AAA" x="+64"  y="-128" width="64" height="64"/>
+		<rect fill="#FFF" x="+128" y="-128" width="64" height="64"/>
+		<rect fill="#AAA" x="+192" y="-128" width="64" height="64"/>
+		<rect fill="#AAA" x="-256" y="-64"  width="64" height="64"/>
+		<rect fill="#FFF" x="-192" y="-64"  width="64" height="64"/>
+		<rect fill="#AAA" x="-128" y="-64"  width="64" height="64"/>
+		<rect fill="#FFF" x="-64"  y="-64"  width="64" height="64"/>
+		<rect fill="#AAA" x="0"    y="-64"  width="64" height="64"/>
+		<rect fill="#FFF" x="+64"  y="-64"  width="64" height="64"/>
+		<rect fill="#AAA" x="+128" y="-64"  width="64" height="64"/>
+		<rect fill="#FFF" x="+192" y="-64"  width="64" height="64"/>
+	</g>
+	
+	<!-- felezővonal -->
+	<g stroke="#666" stroke-width="6" stroke-linecap="round">
+		<line stroke-dasharray="14, 26, 14, 26" stroke-dashoffset="7" x1="-320" y1="0" x2="+320" y2="0"/>
+		<line stroke-dasharray="11, 21, 11, 21" stroke-dashoffset="5.5" x1="-256" y1="-368" x2="+256" y2="-368"/>
+	</g>
+	
+</svg>

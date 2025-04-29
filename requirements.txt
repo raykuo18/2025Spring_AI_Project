@@ -1,3 +1,4 @@
+# TODO: Update/reorganize this file, remove unused packages
 transformers
 accelerate
 datasets
@@ -14,3 +15,4 @@ bert-score
 peft
 bitsandbytes
 numpy
+PyQt5

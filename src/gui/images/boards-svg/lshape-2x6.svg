@@ -1,0 +1,77 @@
+<?xml version='1.0' encoding='UTF-8' standalone='no'?>
+<!--
+	A képet a rect.cpp generálta a következő paraméterekkel:
+	8 8 96 -edge=8 -fields=1111111111111111111111111111111111111111111111111111110011111100
+	Felhasználási feltételek: Nevezd meg! - Így add tovább! (Creative Commons)
+	Uray M. János
+	2013-2014
+-->
+<!DOCTYPE svg PUBLIC '-//W3C//DTD SVG 1.1//EN' 'http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd'>
+<svg width='784' height='784' viewBox='-8 -8 784 784' xmlns='http://www.w3.org/2000/svg' xmlns:xlink='http://www.w3.org/1999/xlink'>
+	
+	<!-- keret -->
+	<path fill='none' stroke='#666' stroke-width='16' stroke-linejoin='miter' d='M 0,0 L 768,0 L 768,576 L 592,576 A 16,16,0 1,0 576,592 L 576,768 L 0,768 Z'/>
+	
+	<!-- mezők -->
+	<rect fill='#FFF' x='0' y='0' width='96' height='96'/>
+	<rect fill='#AAA' x='96' y='0' width='96' height='96'/>
+	<rect fill='#FFF' x='192' y='0' width='96' height='96'/>
+	<rect fill='#AAA' x='288' y='0' width='96' height='96'/>
+	<rect fill='#FFF' x='384' y='0' width='96' height='96'/>
+	<rect fill='#AAA' x='480' y='0' width='96' height='96'/>
+	<rect fill='#FFF' x='576' y='0' width='96' height='96'/>
+	<rect fill='#AAA' x='672' y='0' width='96' height='96'/>
+	<rect fill='#AAA' x='0' y='96' width='96' height='96'/>
+	<rect fill='#FFF' x='96' y='96' width='96' height='96'/>
+	<rect fill='#AAA' x='192' y='96' width='96' height='96'/>
+	<rect fill='#FFF' x='288' y='96' width='96' height='96'/>
+	<rect fill='#AAA' x='384' y='96' width='96' height='96'/>
+	<rect fill='#FFF' x='480' y='96' width='96' height='96'/>
+	<rect fill='#AAA' x='576' y='96' width='96' height='96'/>
+	<rect fill='#FFF' x='672' y='96' width='96' height='96'/>
+	<rect fill='#FFF' x='0' y='192' width='96' height='96'/>
+	<rect fill='#AAA' x='96' y='192' width='96' height='96'/>
+	<rect fill='#FFF' x='192' y='192' width='96' height='96'/>
+	<rect fill='#AAA' x='288' y='192' width='96' height='96'/>
+	<rect fill='#FFF' x='384' y='192' width='96' height='96'/>
+	<rect fill='#AAA' x='480' y='192' width='96' height='96'/>
+	<rect fill='#FFF' x='576' y='192' width='96' height='96'/>
+	<rect fill='#AAA' x='672' y='192' width='96' height='96'/>
+	<rect fill='#AAA' x='0' y='288' width='96' height='96'/>
+	<rect fill='#FFF' x='96' y='288' width='96' height='96'/>
+	<rect fill='#AAA' x='192' y='288' width='96' height='96'/>
+	<rect fill='#FFF' x='288' y='288' width='96' height='96'/>
+	<rect fill='#AAA' x='384' y='288' width='96' height='96'/>
+	<rect fill='#FFF' x='480' y='288' width='96' height='96'/>
+	<rect fill='#AAA' x='576' y='288' width='96' height='96'/>
+	<rect fill='#FFF' x='672' y='288' width='96' height='96'/>
+	<rect fill='#FFF' x='0' y='384' width='96' height='96'/>
+	<rect fill='#AAA' x='96' y='384' width='96' height='96'/>
+	<rect fill='#FFF' x='192' y='384' width='96' height='96'/>
+	<rect fill='#AAA' x='288' y='384' width='96' height='96'/>
+	<rect fill='#FFF' x='384' y='384' width='96' height='96'/>
+	<rect fill='#AAA' x='480' y='384' width='96' height='96'/>
+	<rect fill='#FFF' x='576' y='384' width='96' height='96'/>
+	<rect fill='#AAA' x='672' y='384' width='96' height='96'/>
+	<rect fill='#AAA' x='0' y='480' width='96' height='96'/>
+	<rect fill='#FFF' x='96' y='480' width='96' height='96'/>
+	<rect fill='#AAA' x='192' y='480' width='96' height='96'/>
+	<rect fill='#FFF' x='288' y='480' width='96' height='96'/>
+	<rect fill='#AAA' x='384' y='480' width='96' height='96'/>
+	<path fill='#FFF' d='M 480,480 L 576,480 L 576,560 A 16,16,0 0,0 560,576 L 480,576 Z'/>
+	<path fill='#AAA' d='M 576,480 L 672,480 L 672,576 L 592,576 A 16,16,0 0,0 576,560 Z'/>
+	<rect fill='#FFF' x='672' y='480' width='96' height='96'/>
+	<rect fill='#FFF' x='0' y='576' width='96' height='96'/>
+	<rect fill='#AAA' x='96' y='576' width='96' height='96'/>
+	<rect fill='#FFF' x='192' y='576' width='96' height='96'/>
+	<rect fill='#AAA' x='288' y='576' width='96' height='96'/>
+	<rect fill='#FFF' x='384' y='576' width='96' height='96'/>
+	<path fill='#AAA' d='M 480,576 L 560,576 A 16,16,0 0,0 576,592 L 576,672 L 480,672 Z'/>
+	<rect fill='#AAA' x='0' y='672' width='96' height='96'/>
+	<rect fill='#FFF' x='96' y='672' width='96' height='96'/>
+	<rect fill='#AAA' x='192' y='672' width='96' height='96'/>
+	<rect fill='#FFF' x='288' y='672' width='96' height='96'/>
+	<rect fill='#AAA' x='384' y='672' width='96' height='96'/>
+	<rect fill='#FFF' x='480' y='672' width='96' height='96'/>
+	
+</svg>
