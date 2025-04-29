@@ -213,6 +213,7 @@ class MainWindow(QMainWindow):
     def new_game(self) -> None:
         """Reset the board to the initial position."""
         self.board.reset()
+        self.board_widget.set_arrows([])  # clear any existing arrows
         self.board_widget.update()
 
     def make_user_move(self, move: chess.Move) -> None:
