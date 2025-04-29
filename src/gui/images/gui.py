@@ -13,6 +13,9 @@ from PyQt5.QtGui import QPainter, QPixmap, QColor, QPen
 from PyQt5.QtCore import Qt
 from PyQt5.QtSvg import QSvgRenderer  # for rendering SVGs
 
+from typing import Any, Dict, List, Optional
+from PyQt5.QtGui import QPaintEvent, QMouseEvent, QCloseEvent
+
 import math
 from math import atan2, cos, sin, pi
 
@@ -33,11 +36,11 @@ from math import atan2, cos, sin, pi
 # - add option to show explainer for each move
 
 # directory containing your SVGs
-SVG_DIR = "pieces-basic-svg"
-SQUARE_SIZE = 60
+SVG_DIR: str = "pieces-basic-svg"  # directory containing piece SVGs
+SQUARE_SIZE: int = 60  # size of each square in pixels
 
 # map from chess piece letter to file-base name
-PIECE_NAME = {
+PIECE_NAME: Dict[str, str] = {
     "p": "pawn",
     "r": "rook",
     "n": "knight",
@@ -47,11 +50,28 @@ PIECE_NAME = {
 }
 
 # this will hold QPixmaps keyed by piece.symbol()
-PIECE_IMAGES = {}
+PIECE_IMAGES: Dict[str, str] = {}
 
 
 class ChessBoardWidget(QWidget):
-    def __init__(self, board, *args, **kwargs):
+    """A widget that renders the chess board and pieces, handles user clicks, and draws move arrows.
+
+    Attributes:
+        board: The chess.Board instance representing the game state.
+        selected_square: The currently selected square index or None.
+        arrows: List of chess.Move objects to draw arrows for.
+    """
+
+    board: chess.Board
+    selected_square: Optional[int]
+    arrows: List[chess.Move]
+
+    def __init__(self, board: chess.Board, *args: Any, **kwargs: Any) -> None:
+        """Initialize the chess board widget, load piece images, and set up initial state.
+
+        Args:
+            board: The chess.Board instance to display.
+        """
         super().__init__(*args, **kwargs)
         self.board = board
         self.selected_square = None
@@ -77,7 +97,12 @@ class ChessBoardWidget(QWidget):
 
         self.setFixedSize(8 * SQUARE_SIZE, 8 * SQUARE_SIZE)
 
-    def paintEvent(self, event):
+    def paintEvent(self, event: QPaintEvent) -> None:
+        """Render the chessboard, pieces, selection highlight, and move arrows.
+
+        Args:
+            event: The paint event triggering the redraw.
+        """
         qp = QPainter(self)
         colors = [Qt.white, Qt.gray]
         for rank in range(8):
@@ -134,7 +159,12 @@ class ChessBoardWidget(QWidget):
             qp.drawLine(int(tx), int(ty), int(x1), int(y1))
             qp.drawLine(int(tx), int(ty), int(x2), int(y2))
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        """Handle mouse clicks to select and move pieces.
+
+        Args:
+            event: The mouse event containing click coordinates.
+        """
         file = event.x() // SQUARE_SIZE
         rank = 7 - (event.y() // SQUARE_SIZE)
         sq = chess.square(file, rank)
@@ -149,16 +179,21 @@ class ChessBoardWidget(QWidget):
             self.selected_square = None
             self.update()
 
-    def set_arrows(self, moves):
-        """
-        Set arrows to draw. `moves` is a list of chess.Move objects.
+    def set_arrows(self, moves: List[chess.Move]) -> None:
+        """Update the list of move arrows to draw and request a repaint.
+
+        Args:
+            moves: List of chess.Move objects to visualize as arrows.
         """
         self.arrows = moves
         self.update()
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    """Main application window integrating the chess board widget and engine controls."""
+
+    def __init__(self) -> None:
+        """Set up the main window, create the engine, board widget, and UI controls."""
         super().__init__()
         self.setWindowTitle("Stockfish vs You")
         self.board = chess.Board()
@@ -175,11 +210,17 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(central)
 
-    def new_game(self):
+    def new_game(self) -> None:
+        """Reset the board to the initial position."""
         self.board.reset()
         self.board_widget.update()
 
-    def make_user_move(self, move):
+    def make_user_move(self, move: chess.Move) -> None:
+        """Execute the player's move, update the board, display arrows, and get the engine's response.
+
+        Args:
+            move: The player's chess.Move object.
+        """
         # player's move
         self.board.push(move)
         # show arrow for player's move
@@ -190,7 +231,12 @@ class MainWindow(QMainWindow):
         # show arrows for both moves
         self.board_widget.set_arrows([move, result.move])
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Quit the engine and handle window close event cleanup.
+
+        Args:
+            event: The close event.
+        """
         self.engine.quit()
         super().closeEvent(event)
 
