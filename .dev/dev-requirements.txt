@@ -1,0 +1,7 @@
+# Dev
+jupyter
+notebook # Prototyping & testing [NOTE: This is a new non-standard feature]
+black
+flake8 # Default linting
+pylint # Generating UML diagrams
+graphviz # Generating UML diagrams, requires external dependency: Graphviz
