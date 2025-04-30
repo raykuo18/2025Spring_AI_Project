@@ -98,8 +98,8 @@ def generate_and_save_combined():
     random.shuffle(combined_data)  # Shuffle for better mixing during training
 
     df = pd.DataFrame(combined_data)
-    df.to_csv("generated_chess_dataset.csv", index=False)
-    print("✅ Combined dataset generated and saved as 'generated_chess_dataset.csv'.")
+    df.to_csv("training_data/phase1/phase1_synthetic_data.csv", index=False)
+    print("✅ Combined dataset generated and saved as 'phase1_synthetic_data.csv'.")
 
 if __name__ == "__main__":
     generate_and_save_combined()
