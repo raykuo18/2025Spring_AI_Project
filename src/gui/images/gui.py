@@ -23,6 +23,7 @@ from math import atan2, cos, sin, pi
 # - start game from some state
 # - take UCI input to make a move
 # - take FEN stae input to start from some state
+# - Show board positions on the side of the board
 #
 # - Inputs: user moves (model replace user), board state, stockfish (internal engine) moves
 # - Outputs: latest board state (after both user and stockfish moves)
@@ -31,6 +32,8 @@ from math import atan2, cos, sin, pi
 # - add option to change to black/white
 # - add window to show moves played
 # - add option to show explainer for each move
+#
+# - WARNING: Model training on synthetic may lead to model collapse
 
 # directory containing your SVGs
 SVG_DIR: str = "pieces-basic-svg"  # directory containing piece SVGs
