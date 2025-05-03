@@ -3,3 +3,10 @@
 **.pptx
 **.potx
 api_key/**
+**.gguf
+**.csv
+**.jsonl
+/llama.cpp
+/pretrained_cache
+/.vscode
+/training_data
