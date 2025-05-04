@@ -18,3 +18,4 @@ numpy
 huggingface_hub
 llama-cpp-python
 sentence-transformers
+auto-gptq
