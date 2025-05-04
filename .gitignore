@@ -10,3 +10,5 @@ api_key/**
 /pretrained_cache
 /.vscode
 /training_data
+/base_model
+/lora_adapter
