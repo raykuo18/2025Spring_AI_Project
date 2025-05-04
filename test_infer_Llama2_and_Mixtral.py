@@ -57,5 +57,11 @@ def benchmark_mixtral():
     print(f"Time per token: {(end - start)/tokens_generated:.4f} sec/token")
 
 if __name__ == "__main__":
-    benchmark_llama2()
-    benchmark_mixtral()
+    try:
+        benchmark_llama2()
+    except:
+        print("Llama 2 fail")
+    try:
+        benchmark_mixtral()
+    except:
+        print("mixtral fail")
