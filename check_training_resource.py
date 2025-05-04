@@ -14,10 +14,27 @@ from peft import get_peft_model, LoraConfig
 import gc
 import os
 
+# ========== CONFIG DEVICE ==========
+def get_device() -> torch.device:
+    """Returns the best available device: CUDA (NVIDIA GPU), MPS (Apple GPU), or CPU.
+
+    Returns:
+        Torch device
+    """
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
+
+device_map: torch.device = get_device()
+# =====================================
+
 # ========== CONFIG ==========
 base_model_name = "mistralai/Mistral-7B-v0.1"
 use_second_branch = True  # ✅ set to True to prepare for 2-branch LoRA
-device_map = "auto"  # let accelerate split across GPUs
+# device_map = "auto"  # let accelerate split across GPUs
 dtype = torch.float16
 # ============================
 
