@@ -14,6 +14,8 @@ bert-score
 peft
 bitsandbytes
 numpy
-
 # Cluster requirements
 huggingface_hub
+llama-cpp-python
+sentence-transformers
+auto-gptq
