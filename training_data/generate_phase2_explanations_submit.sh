@@ -35,7 +35,7 @@ nvidia-smi
 # source activate your_conda_env
 # /home/<netid>/miniconda3/envs/your_conda_env/bin/python /home/<netid>/run.py
 cd /home/skuo/2025Spring_AI_Project/training_data
-conda activate ai-project
+
 python generate_phase2_explanations.py \
     --input-prompts-file phase2/prompts_${PHASE}.jsonl \
     --output-training-folder phase2/${PHASE}/ \
