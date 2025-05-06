@@ -1,0 +1,16 @@
+✅ Loading model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+✅ LoRA trainable params: 1,126,400 / 1,101,174,784 (0.1023%)
+✅ LoRA adapter saved to ./lora_adapter/TinyLLaMA
+
+✅ Next steps:
+
+1️⃣ Convert base model → GGUF locally:
+$ cd llama.cpp
+$ python3 convert-hf-to-gguf.py --model-dir ./base_model/TinyLLaMA/model --outfile ./base_model_TinyLLaMA.gguf
+
+2️⃣ Convert LoRA adapter → GGUF (web app):
+👉 https://huggingface.co/spaces/ggml-org/gguf-my-lora
+
+3️⃣ Quantize:
+$ ./quantize ./base_model_TinyLLaMA.gguf ./base_model_TinyLLaMA.q4_k_m.gguf q4_K_M
+

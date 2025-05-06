@@ -1,0 +1,14 @@
+CUDA available. Found 2 GPU(s).
+GPU 0: Tesla V100-SXM2-32GB
+GPU 1: Tesla V100-SXM2-32GB
+
+=== Benchmark: LLaMA 2 65B q4_k_m (2x V100) ===
+LLaMA 2 65B GPTQ (2x V100) failed: Repo id must be in the form 'repo_name' or 'namespace/repo_name': './models/Llama2_65B_GPTQ'. Use `repo_type` argument if needed.
+
+=== Benchmark: Mixtral 8x7B (4-bit Quantized, 2x V100) ===
+Mixtral 8x7B (4-bit, 2x V100) failed: You are trying to access a gated repo.
+Make sure to have access to it at https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1.
+403 Client Error. (Request ID: Root=1-681a2855-18798ab358f1a7a628e02e95;942cd214-8905-4bb0-89b4-07985f487088)
+
+Cannot access gated repo for url https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1/resolve/main/config.json.
+Access to model mistralai/Mixtral-8x7B-Instruct-v0.1 is restricted and you are not in the authorized list. Visit https://huggingface.co/mistralai/Mixtral-8x7B-Instruct-v0.1 to ask for access.
