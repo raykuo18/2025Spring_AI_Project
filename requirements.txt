@@ -14,6 +14,7 @@ safetensors          # Often a dependency for secure model weight handling
 bitsandbytes>=0.42.0 # For 4-bit/8-bit quantization (NF4, etc.). Ensure compatibility with your CUDA version.
 auto-gptq>=0.7.0     # For running GPTQ quantized models. Keep up-to-date for new features/kernels.
                      # Consider a specific build if available for your CUDA version if generic pip install has issues.
+                     # NOTE: Use python version 3.10 (<=3.12), and load module (command shown here): module load cuda11.1
 # optimum>=1.17.0    # For advanced model optimization, export to ONNX, and some specific hardware acceleration (e.com/NVIDIA/FasterTransformer).
                      # Also, some AutoGPTQ backends (like exllamav2) might leverage optimum.
 peft>=0.9.0          # Parameter-Efficient Fine-Tuning (LoRA, etc.), if you plan to fine-tune
