@@ -9,45 +9,9 @@ from typing import List, Dict, Optional, Tuple
 import chess
 import chess.engine
 from tqdm import tqdm
-import time # For unique file names
-import concurrent.futures
-import tempfile # For temporary cache files
-import gc # For garbage collection, maybe helpful
 
-# --- Global variable for worker engine (managed per process) ---
-# This is one way to reuse the engine within a worker process across multiple tasks
-worker_engine_instance = None
+# --- Metadata and Annotation Parsing ---
 
-# --- Engine Initialization for Worker ---
-def initialize_worker_engine(engine_path):
-    """Initializes the engine for a worker process."""
-    global worker_engine_instance
-    if worker_engine_instance is None and engine_path and os.path.exists(engine_path):
-        try:
-            worker_engine_instance = chess.engine.SimpleEngine.popen_uci(engine_path)
-            # Optional: Configure engine? e.g., worker_engine_instance.configure({"Threads": 1})
-            # print(f"Worker {os.getpid()} initialized engine.") # Debug
-        except Exception as e:
-            print(f"Worker {os.getpid()} failed to initialize engine: {e}")
-            worker_engine_instance = None # Ensure it's None if failed
-    # else: # Debug
-        # print(f"Worker {os.getpid()} using existing engine or no path provided.")
-
-# --- Engine Cleanup for Worker ---
-def close_worker_engine():
-    """Closes the engine for a worker process."""
-    global worker_engine_instance
-    if worker_engine_instance is not None:
-        try:
-            worker_engine_instance.quit()
-            # print(f"Worker {os.getpid()} closed engine.") # Debug
-        except chess.engine.EngineTerminatedError:
-            pass # Already closed
-        except Exception as e:
-            print(f"Worker {os.getpid()} error closing engine: {e}")
-        worker_engine_instance = None
-
-# --- Metadata and Annotation Parsing (No changes needed) ---
 def parse_pgn_metadata(headers: List[str]) -> Dict:
     meta = {}
     for line in headers:
@@ -76,67 +40,140 @@ def extract_move_annotations(text: str) -> Tuple[Optional[float], Optional[str],
     cleaned_comments = [c.strip() for c in comments if c.strip()]
     if cleaned_comments:
         comment_val = ' '.join(cleaned_comments)
-        # print(f"Found Comment: {comment_val}") # Keep if desired
+        # print(f"Found Comment: {comment_val}") # Kept from user request
     return eval_val, clk_val, comment_val
 
-# --- Move Parsing with UCI (No changes needed) ---
-def parse_pgn_moves(pgn_text: str, board: chess.Board) -> List[Dict]:
+# --- Move Parsing with UCI ---
+
+def parse_pgn_moves(pgn_text: str, board: chess.Board) -> Optional[List[Dict]]: # Return Optional List
     moves_data = []
     pgn_text = re.sub(r'\s*(1-0|0-1|1/2-1/2|\*)\s*$', '', pgn_text).strip()
-    pgn_text = re.sub(r'\([^)]*\)', '', pgn_text)
-    pgn_text = re.sub(r'\s+', ' ', pgn_text)
-    san_regex = re.compile(r'([PNBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[PNBRQK])?|O-O(?:-O)?)([?!+#]*)')
+    pgn_text = re.sub(r'\([^)]*\)', '', pgn_text) # Remove variations (simple)
+    pgn_text = re.sub(r'\s+', ' ', pgn_text)     # Normalize whitespace
+
+    san_regex = re.compile(
+        r'([PNBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[PNBRQK])?|O-O(?:-O)?)'
+        r'([?!+#]*)'
+    )
     move_num_regex = re.compile(r'(\d+)\s*\.{1,3}')
+
     current_pos = 0
     current_pair: Optional[Dict] = None
+
     while current_pos < len(pgn_text):
         search_start = current_pos
-        while search_start < len(pgn_text) and pgn_text[search_start] in (' ', '{', '['):
-            if pgn_text[search_start] == '{': match = re.match(r'\{.*?\}', pgn_text[search_start:]); search_start += match.end() if match else 1
-            elif pgn_text[search_start] == '[': match = re.match(r'\[.*?\]', pgn_text[search_start:]); search_start += match.end() if match else 1
-            else: search_start += 1
+        # --- Robust pre-skipping for comments/annotations ---
+        while search_start < len(pgn_text):
+            char = pgn_text[search_start]
+            if char == ' ':
+                search_start += 1
+            elif char == '{':
+                try:
+                    brace_depth = 1
+                    end_comment = search_start + 1
+                    while end_comment < len(pgn_text) and brace_depth > 0:
+                        if pgn_text[end_comment] == '{': brace_depth += 1
+                        elif pgn_text[end_comment] == '}': brace_depth -= 1
+                        end_comment += 1
+                    search_start = end_comment if brace_depth == 0 else search_start + 1
+                except IndexError: search_start = len(pgn_text)
+            elif char == '[':
+                try:
+                    end_annot = pgn_text.find(']', search_start + 1)
+                    search_start = end_annot + 1 if end_annot != -1 else search_start + 1
+                except IndexError: search_start = len(pgn_text)
+            else:
+                break
         current_pos = search_start
         if current_pos >= len(pgn_text): break
+        # --- End robust pre-skipping ---
+
+
         num_match = move_num_regex.match(pgn_text, current_pos)
-        san_match = san_regex.match(pgn_text, current_pos)
+        san_match = san_regex.match(pgn_text, current_pos) # Initial attempt
         move_number_found = 0
+
         if num_match:
             move_number_found = int(num_match.group(1))
             potential_san_after_num = san_regex.match(pgn_text, num_match.end())
-            if potential_san_after_num: san_match = potential_san_after_num; current_pos = num_match.end()
-            else: current_pos = num_match.end(); san_match = None
+            if potential_san_after_num:
+                 san_match = potential_san_after_num
+                 current_pos = num_match.end() # Update current_pos for where san_match starts
+            else:
+                 current_pos = num_match.end() # Consumed number token
+                 san_match = None # No SAN immediately after number
+
         if san_match:
-            san_for_parsing, nags_checks = san_match.groups()
+            san_for_parsing = san_match.group(1)
+            nags_checks = san_match.group(2)
             san_original = san_for_parsing + nags_checks
-            current_pos = san_match.end()
-            if not re.search('[a-hO]', san_for_parsing): continue
+
+            # <<< --- FIXED LINE --- >>>
+            # Use the end position of the match that found the SAN
+            pos_after_san = san_match.end()
+            # <<< --- END FIX --- >>>
+
+            if not re.search('[a-hO]', san_for_parsing):
+                 current_pos = pos_after_san # Ensure we move past this non-move
+                 continue
+
             current_move_number = move_number_found if move_number_found > 0 else board.fullmove_number
             is_black_turn_to_move = (board.turn == chess.BLACK)
-            move_uci, valid_move = None, False
-            try: move = board.parse_san(san_for_parsing); move_uci = move.uci(); board.push(move); valid_move = True
-            except ValueError as e: print(f"Warning: Invalid SAN '{san_for_parsing}' ('{san_original}') for move ~{current_move_number} on {board.fen()}. Error: {e}. Skipping."); continue
+            move_uci = None
+
+            try:
+                move = board.parse_san(san_for_parsing)
+                move_uci = move.uci()
+                board.push(move)
+            except ValueError as e:
+                print(f"FATAL PARSE ERROR: Game may be corrupt. Invalid SAN '{san_for_parsing}' ('{san_original}') for move ~{current_move_number} on {board.fen()}. Error: {e}. Skipping this game.")
+                return None # Signal to skip this game
+
+            # Extract annotations AFTER the move
             annotation_text = ""
-            annot_start = current_pos
-            while annot_start < len(pgn_text) and pgn_text[annot_start] in (' ', '{', '['):
-                 if pgn_text[annot_start] == '{': match = re.match(r'\{.*?\}', pgn_text[annot_start:]); annotation_text += match.group(0) + " "; annot_start += match.end() if match else 1
-                 elif pgn_text[annot_start] == '[': match = re.match(r'\[.*?\]', pgn_text[annot_start:]); annotation_text += match.group(0) + " "; annot_start += match.end() if match else 1
-                 else: annot_start += 1
-            current_pos = annot_start
+            annot_start = pos_after_san # Start looking for annotations right after the SAN
+            temp_current_pos_for_annot = annot_start
+            while temp_current_pos_for_annot < len(pgn_text):
+                char = pgn_text[temp_current_pos_for_annot]
+                if char == ' ': temp_current_pos_for_annot +=1; continue
+                next_num_match = move_num_regex.match(pgn_text, temp_current_pos_for_annot)
+                next_san_match = san_regex.match(pgn_text, temp_current_pos_for_annot)
+                if next_num_match or next_san_match: break # Next move starts
+
+                if char == '{':
+                    # Use re.DOTALL for multi-line comments here
+                    match = re.match(r'\{.*?\}', pgn_text[temp_current_pos_for_annot:], re.DOTALL)
+                    if match: annotation_text += match.group(0) + " "; temp_current_pos_for_annot += match.end()
+                    else: break # Malformed
+                elif char == '[':
+                    match = re.match(r'\[.*?\]', pgn_text[temp_current_pos_for_annot:])
+                    if match: annotation_text += match.group(0) + " "; temp_current_pos_for_annot += match.end()
+                    else: break
+                else: break
+            current_pos = temp_current_pos_for_annot # Advance main cursor past consumed annotations
+
             eval_cp, clock, comment = extract_move_annotations(annotation_text.strip())
             move_info = {'san': san_original, 'uci': move_uci, 'eval_cp': eval_cp, 'clock': clock, 'comment': comment}
-            if not is_black_turn_to_move:
-                 if current_pair and current_pair['white_move'] is None and current_pair['black_move'] is not None: print(f"Warning: Finalizing Black-only pair {current_pair['move_number']}"); moves_data.append(current_pair); current_pair = None
+
+            if not is_black_turn_to_move: # White's move
+                 if current_pair and current_pair['white_move'] is None and current_pair['black_move'] is not None:
+                      moves_data.append(current_pair); current_pair = None
                  current_pair = {"move_number": current_move_number, "white_move": move_info, "black_move": None}
-            else:
-                 if current_pair and current_pair['move_number'] == current_move_number and current_pair['white_move'] is not None: current_pair['black_move'] = move_info; moves_data.append(current_pair); current_pair = None
-                 else: print(f"Warning: Black move {current_move_number}...{san_original} found without preceding white move."); moves_data.append({"move_number": current_move_number, "white_move": None, "black_move": move_info}); current_pair = None
-        elif not num_match:
+            else: # Black's move
+                 if current_pair and current_pair['move_number'] == current_move_number and current_pair['white_move'] is not None:
+                      current_pair['black_move'] = move_info; moves_data.append(current_pair); current_pair = None
+                 else:
+                      moves_data.append({"move_number": current_move_number, "white_move": None, "black_move": move_info}); current_pair = None
+
+        elif not num_match: # No SAN and no number_token found at current_pos
              if current_pos < len(pgn_text): current_pos += 1
              else: break
-    if current_pair and current_pair['white_move'] and not current_pair['black_move']: moves_data.append(current_pair)
+
+    if current_pair and current_pair['white_move'] and not current_pair['black_move']:
+        moves_data.append(current_pair)
     return moves_data
 
-# --- Filtering and Validation Funcs (No changes needed) ---
+# --- Filtering and Stockfish Validation (Unchanged) ---
 def filter_game(meta: Dict, args) -> bool:
     if args.skip_unfinished and meta.get("Result") == "*": return False
     if args.only_standard and meta.get("Variant", "Standard").lower() != "standard": return False
@@ -169,7 +206,6 @@ def validate_eval(existing_cp: Optional[float], computed_cp: Optional[float], th
     if abs(existing_cp) > 9000 and abs(computed_cp) > 9000: return existing_cp == computed_cp
     return abs(existing_cp - computed_cp) <= threshold
 
-# --- JSON Output Creation (No changes needed) ---
 def create_json_entry(meta: Dict, moves: List[Dict], starting_fen: str) -> Dict:
     try: white_elo = int(meta.get("WhiteElo", "0"))
     except ValueError: white_elo = None
@@ -177,326 +213,252 @@ def create_json_entry(meta: Dict, moves: List[Dict], starting_fen: str) -> Dict:
     except ValueError: black_elo = None
     return {"game_metadata": {"fen": starting_fen, "result": meta.get("Result"), "white_elo": white_elo, "black_elo": black_elo, "eco": meta.get("ECO"), "variant": meta.get("Variant", "Standard"), "game_url": meta.get("GameURL") or meta.get("Site"), "pgn": moves}, "synthetic_data": [], "distilled_data": []}
 
-# --- <<< NEW: Worker Function for Processing a Single Game >>> ---
-def process_single_game_worker(task_data: Dict) -> Optional[Tuple[Dict, Dict, Dict]]:
-    """
-    Processes a single raw game string. Designed to be run in a worker process.
-    Initializes engine if needed for this process. Manages local cache.
-    Returns tuple: (processed_game_json, stats_for_game, final_local_cache) or None if filtered/error.
-    """
-    global worker_engine_instance # Use the engine instance associated with this worker process
+# --- Main Processing Logic (Includes skip game logic) ---
+def process_file(file_path: str, args, engine, cache: Dict, pbar: tqdm) -> Tuple[List[Dict], Dict]:
+    try:
+        with open(file_path, "r", encoding="utf-8", newline=None) as f: content = f.read()
+    except Exception as e: print(f"Error reading file {file_path}: {e}"); return [], {}
 
-    raw_game = task_data['raw_game']
-    args = task_data['args']
-    local_cache = task_data['cache_copy'] # Start with a copy of the initial cache
+    games_raw = re.split(r'\n\s*\n(?=\[Event)', content.strip())
+    results = []
+    stats = {
+        "games_found_in_file": len(games_raw) if games_raw and games_raw[0] else 0,
+        "games_processed": 0, "games_filtered_out": 0, "games_skipped_parsing_error": 0,
+        "moves_total": 0, "invalid_san_skipped": 0,
+        "moves_with_pgn_eval": 0, "moves_validated": 0,
+        "moves_mismatch": 0, "moves_recomputed": 0, "moves_missing_eval": 0,
+    }
 
-    # --- Basic parsing and filtering ---
-    raw_game = raw_game.strip()
-    if not raw_game or not raw_game.startswith("[Event"): return None
+    for raw_game in games_raw:
+        pbar.update(1)
+        raw_game = raw_game.strip()
+        if not raw_game or not raw_game.startswith("[Event"): continue
 
-    parts = raw_game.split('\n\n', 1)
-    header_text = parts[0]
-    moves_text = parts[1].strip() if len(parts) > 1 else ""
-    headers = header_text.splitlines()
-    meta = parse_pgn_metadata(headers)
+        parts = raw_game.split('\n\n', 1)
+        header_text = parts[0]; moves_text = parts[1].strip() if len(parts) > 1 else ""
+        headers = header_text.splitlines(); meta = parse_pgn_metadata(headers)
 
-    # Initialize stats for this single game
-    game_stats = { k: 0 for k in ["games_processed", "games_filtered_out", "moves_total", "invalid_san_skipped", "moves_with_pgn_eval", "moves_validated", "moves_mismatch", "moves_recomputed", "moves_missing_eval"] }
+        if not filter_game(meta, args): stats["games_filtered_out"] += 1; continue
 
-    if not filter_game(meta, args):
-        game_stats["games_filtered_out"] = 1
-        # Return stats indicating filter out, but no game JSON and the unmodified local cache
-        return None, game_stats, local_cache
+        board = chess.Board()
+        fen = meta.get("FEN"); variant = meta.get("Variant", "Standard").lower()
+        if fen:
+            try: board.set_fen(fen)
+            except ValueError: print(f"Warning: Invalid FEN '{fen}'. Using standard start."); board.reset()
+        elif variant == "chess960": board.chess960 = True; print(f"Info: Game is Chess960 (Variant tag). Flag: {board.chess960}")
+        elif variant != "standard": print(f"Warning: Variant '{variant}' without FEN. Using standard start.")
+        if board.chess960 and variant != "chess960": print(f"Info: Game is Chess960 (FEN detected). Flag: {board.chess960}")
 
-    # --- Setup board ---
-    board = chess.Board()
-    fen = meta.get("FEN")
-    variant = meta.get("Variant", "Standard").lower()
-    if fen:
-        try: board.set_fen(fen)
-        except ValueError: print(f"Warning: Invalid FEN '{fen}'. Using standard start."); board.reset()
-    elif variant != "standard": print(f"Warning: Variant '{variant}' without FEN. Using standard start.")
+        starting_fen = board.fen()
+        board_for_parsing = board.copy()
+        board_for_eval = board.copy() if engine else None
 
-    starting_fen = board.fen()
-    board_for_parsing = board.copy()
-    board_for_eval = board.copy() if worker_engine_instance else None
+        parsed_moves = parse_pgn_moves(moves_text, board_for_parsing)
+        if parsed_moves is None: # Check if game parsing failed
+            stats["games_skipped_parsing_error"] += 1
+            continue # Skip to the next game
 
-    # --- Parse Moves ---
-    parsed_moves = parse_pgn_moves(moves_text, board_for_parsing)
+        # --- Stockfish Validation (only if parsed_moves is valid) ---
+        if engine:
+            current_eval_board = board_for_eval
+            for move_pair in parsed_moves:
+                move_num = move_pair['move_number']
+                # --- Process White ---
+                if move_pair['white_move']:
+                    w_move_data = move_pair['white_move']
+                    if w_move_data['uci'] is None: stats["invalid_san_skipped"] += 1; continue
+                    board_fen_before_move = current_eval_board.fen()
+                    fen_key = compute_move_key(board_fen_before_move, move_num, is_black=False)
+                    cached_eval = cache.get(fen_key); computed_eval = None; pgn_eval = w_move_data['eval_cp']
+                    if pgn_eval is not None: stats["moves_with_pgn_eval"] += 1
+                    needs_computation = (pgn_eval is None) or (args.overwrite_eval) or (cached_eval is None)
+                    if needs_computation:
+                        if cached_eval is not None: computed_eval = cached_eval
+                        else:
+                            computed_eval = stockfish_eval(engine, current_eval_board, args.analysis_time)
+                            if computed_eval is not None: cache[fen_key] = computed_eval; stats["moves_recomputed"] += 1
+                    else: computed_eval = pgn_eval
+                    if pgn_eval is not None and computed_eval is not None:
+                         stats["moves_validated"] += 1
+                         if not validate_eval(pgn_eval, computed_eval, args.mismatch_threshold):
+                             stats["moves_mismatch"] += 1
+                             print(f"⚠️ Mismatch W Move {move_num} ({w_move_data['san']}): PGN {pgn_eval:.0f} vs SF {computed_eval:.0f} (FEN: {board_fen_before_move})")
+                             if args.abort_on_mismatch: raise RuntimeError(f"Aborted W Move {move_num}.")
+                             if args.overwrite_eval: w_move_data['eval_cp'] = computed_eval
+                         elif args.overwrite_eval: w_move_data['eval_cp'] = computed_eval
+                    elif pgn_eval is None and computed_eval is not None: w_move_data['eval_cp'] = computed_eval; stats["moves_missing_eval"] += 1
+                    try: current_eval_board.push_uci(w_move_data['uci'])
+                    except ValueError: print(f"EvalBoard Error W UCI {w_move_data['uci']}"); break
+                # --- Process Black ---
+                if move_pair['black_move']:
+                    b_move_data = move_pair['black_move']
+                    if b_move_data['uci'] is None: stats["invalid_san_skipped"] += 1; continue
+                    board_fen_before_move = current_eval_board.fen()
+                    fen_key = compute_move_key(board_fen_before_move, move_num, is_black=True)
+                    cached_eval = cache.get(fen_key); computed_eval = None; pgn_eval = b_move_data['eval_cp']
+                    if pgn_eval is not None: stats["moves_with_pgn_eval"] += 1
+                    needs_computation = (pgn_eval is None) or (args.overwrite_eval) or (cached_eval is None)
+                    if needs_computation:
+                        if cached_eval is not None: computed_eval = cached_eval
+                        else:
+                            computed_eval = stockfish_eval(engine, current_eval_board, args.analysis_time)
+                            if computed_eval is not None: cache[fen_key] = computed_eval; stats["moves_recomputed"] += 1
+                    else: computed_eval = pgn_eval
+                    if pgn_eval is not None and computed_eval is not None:
+                         stats["moves_validated"] += 1
+                         if not validate_eval(pgn_eval, computed_eval, args.mismatch_threshold):
+                             stats["moves_mismatch"] += 1
+                             print(f"⚠️ Mismatch B Move {move_num} ({b_move_data['san']}): PGN {pgn_eval:.0f} vs SF {computed_eval:.0f} (FEN: {board_fen_before_move})")
+                             if args.abort_on_mismatch: raise RuntimeError(f"Aborted B Move {move_num}.")
+                             if args.overwrite_eval: b_move_data['eval_cp'] = computed_eval
+                         elif args.overwrite_eval: b_move_data['eval_cp'] = computed_eval
+                    elif pgn_eval is None and computed_eval is not None: b_move_data['eval_cp'] = computed_eval; stats["moves_missing_eval"] += 1
+                    try: current_eval_board.push_uci(b_move_data['uci'])
+                    except ValueError: print(f"EvalBoard Error B UCI {b_move_data['uci']}"); break
 
-    # --- Stockfish Validation/Computation ---
-    if worker_engine_instance:
-        current_eval_board = board_for_eval
-        for move_pair in parsed_moves:
-            move_num = move_pair['move_number']
-            # --- Process White ---
-            if move_pair['white_move']:
-                w_move_data = move_pair['white_move']
-                if w_move_data['uci'] is None: game_stats["invalid_san_skipped"] += 1; continue
-                board_fen_before_move = current_eval_board.fen()
-                fen_key = compute_move_key(board_fen_before_move, move_num, is_black=False)
-                cached_eval = local_cache.get(fen_key) # Use local_cache
-                computed_eval = None; pgn_eval = w_move_data['eval_cp']
-                if pgn_eval is not None: game_stats["moves_with_pgn_eval"] += 1
-                needs_computation = (pgn_eval is None) or (args.overwrite_eval) or (cached_eval is None)
-                if needs_computation:
-                    if cached_eval is not None: computed_eval = cached_eval
-                    else:
-                        computed_eval = stockfish_eval(worker_engine_instance, current_eval_board, args.analysis_time)
-                        if computed_eval is not None: local_cache[fen_key] = computed_eval; game_stats["moves_recomputed"] += 1 # Update local_cache
-                else: computed_eval = pgn_eval
-                if pgn_eval is not None and computed_eval is not None:
-                     game_stats["moves_validated"] += 1
-                     if not validate_eval(pgn_eval, computed_eval, args.mismatch_threshold):
-                         game_stats["moves_mismatch"] += 1
-                         # Reduced print frequency for parallel runs, maybe log to worker file instead?
-                         # print(f"pid {os.getpid()} ⚠️ Mismatch W {move_num} ({w_move_data['san']}): PGN {pgn_eval:.0f} vs SF {computed_eval:.0f}")
-                         if args.abort_on_mismatch: raise RuntimeError(f"Aborted due to mismatch pid {os.getpid()}")
-                         if args.overwrite_eval: w_move_data['eval_cp'] = computed_eval
-                     elif args.overwrite_eval: w_move_data['eval_cp'] = computed_eval
-                elif pgn_eval is None and computed_eval is not None: w_move_data['eval_cp'] = computed_eval; game_stats["moves_missing_eval"] += 1
-                try: current_eval_board.push_uci(w_move_data['uci'])
-                except ValueError: break # Error in game, stop eval
+        json_entry = create_json_entry(meta, parsed_moves, starting_fen)
+        results.append(json_entry)
+        stats["games_processed"] += 1
+        for mv_pair in parsed_moves:
+            if mv_pair.get('white_move'): stats['moves_total'] += 1
+            if mv_pair.get('black_move'): stats['moves_total'] += 1
 
-            # --- Process Black ---
-            if move_pair['black_move']:
-                b_move_data = move_pair['black_move']
-                if b_move_data['uci'] is None: game_stats["invalid_san_skipped"] += 1; continue
-                board_fen_before_move = current_eval_board.fen()
-                fen_key = compute_move_key(board_fen_before_move, move_num, is_black=True)
-                cached_eval = local_cache.get(fen_key) # Use local_cache
-                computed_eval = None; pgn_eval = b_move_data['eval_cp']
-                if pgn_eval is not None: game_stats["moves_with_pgn_eval"] += 1
-                needs_computation = (pgn_eval is None) or (args.overwrite_eval) or (cached_eval is None)
-                if needs_computation:
-                    if cached_eval is not None: computed_eval = cached_eval
-                    else:
-                        computed_eval = stockfish_eval(worker_engine_instance, current_eval_board, args.analysis_time)
-                        if computed_eval is not None: local_cache[fen_key] = computed_eval; game_stats["moves_recomputed"] += 1 # Update local_cache
-                else: computed_eval = pgn_eval
-                if pgn_eval is not None and computed_eval is not None:
-                     game_stats["moves_validated"] += 1
-                     if not validate_eval(pgn_eval, computed_eval, args.mismatch_threshold):
-                         game_stats["moves_mismatch"] += 1
-                         # print(f"pid {os.getpid()} ⚠️ Mismatch B {move_num} ({b_move_data['san']}): PGN {pgn_eval:.0f} vs SF {computed_eval:.0f}")
-                         if args.abort_on_mismatch: raise RuntimeError(f"Aborted due to mismatch pid {os.getpid()}")
-                         if args.overwrite_eval: b_move_data['eval_cp'] = computed_eval
-                     elif args.overwrite_eval: b_move_data['eval_cp'] = computed_eval
-                elif pgn_eval is None and computed_eval is not None: b_move_data['eval_cp'] = computed_eval; game_stats["moves_missing_eval"] += 1
-                try: current_eval_board.push_uci(b_move_data['uci'])
-                except ValueError: break
+    # Print summary statistics for this file
+    print("-" * 20)
+    print(f"File: {os.path.basename(file_path)}")
+    print(f"Games Found in File: {stats['games_found_in_file']}")
+    print(f"Games Filtered Out: {stats['games_filtered_out']}")
+    print(f"Games Skipped due to Parsing Error: {stats['games_skipped_parsing_error']}") # Added
+    print(f"Games Processed: {stats['games_processed']}")
+    print(f"Total Moves Parsed (in processed games): {stats['moves_total']}")
+    print(f"Invalid SAN Moves Skipped (during Stockfish pass): {stats['invalid_san_skipped']}") # Clarified this stat
+    if engine:
+        print(f"Moves with PGN Eval: {stats['moves_with_pgn_eval']}")
+        print(f"Moves Validated w/ Stockfish: {stats['moves_validated']}")
+        print(f"Eval Mismatches: {stats['moves_mismatch']}")
+        print(f"Moves Recomputed/Cached: {stats['moves_recomputed']}")
+        print(f"Moves with Eval Added: {stats['moves_missing_eval']}")
+    print("-" * 20)
 
-    # --- Create JSON entry ---
-    json_entry = create_json_entry(meta, parsed_moves, starting_fen)
-    game_stats["games_processed"] = 1
-    for mv_pair in parsed_moves:
-        if mv_pair.get('white_move'): game_stats['moves_total'] += 1
-        if mv_pair.get('black_move'): game_stats['moves_total'] += 1
+    return results, stats
 
-    # Return JSON, stats for this game, and the potentially updated local cache for merging
-    return json_entry, game_stats, local_cache
-
-# --- <<< NEW: Cache Merging Function >>> ---
-def merge_caches(main_cache, worker_cache):
-    """Merges updates from worker_cache into main_cache."""
-    # Simple merge: worker updates overwrite main cache entries
-    # More sophisticated merging could be added if needed (e.g., based on timestamp or analysis time if stored)
-    main_cache.update(worker_cache)
-
-
-# --- <<< REFACTORED Main Processing Logic >>> ---
 def main(args):
-    # --- Cache Loading (as before) ---
-    cache_file = None
-    main_cache = {} # Renamed for clarity
+    # --- Cache and Engine Setup ---
+    cache_file = None; cache = {}
     if args.cache_dir:
-        # ... (cache directory creation logic as before) ...
+        if not os.path.exists(args.cache_dir):
+            try: os.makedirs(args.cache_dir) ; print(f"Created cache: {args.cache_dir}")
+            except OSError as e: print(f"Error creating cache dir {args.cache_dir}: {e}. Cache disabled."); args.cache_dir = None
         if args.cache_dir:
              cache_file = os.path.join(args.cache_dir, "eval_cache.json")
              if os.path.exists(cache_file):
                  try:
-                     with open(cache_file, "r") as f: main_cache = json.load(f)
-                     print(f"Loaded {len(main_cache)} cached evaluations from {cache_file}")
-                 except Exception as e: print(f"Warning: Error loading cache file {cache_file}: {e}. Starting fresh."); main_cache = {}
+                     with open(cache_file, "r") as f: cache = json.load(f)
+                     print(f"Loaded {len(cache)} evals from {cache_file}")
+                 except Exception as e: print(f"Warn: Error loading cache {cache_file}: {e}. Starting fresh."); cache = {}
+    engine = None
+    if args.stockfish_path:
+        if not os.path.exists(args.stockfish_path): print(f"Error: Stockfish path not found: {args.stockfish_path}. Validation disabled."); args.stockfish_path = None
+        else:
+             try: engine = chess.engine.SimpleEngine.popen_uci(args.stockfish_path); print(f"Stockfish engine: {args.stockfish_path}")
+             except Exception as e: print(f"Error initializing Stockfish: {e}. Validation disabled."); engine = None
 
-    # --- Prepare Game Data ---
-    print("Reading PGN files and splitting into games...")
-    all_raw_games = []
-    total_games_found = 0
+    # --- Pre-calculate total games ---
+    print("Pre-calculating total games...")
+    total_games = 0
     for file_path in args.input_files:
-        if not os.path.exists(file_path): print(f"Warning: Input file not found: {file_path}. Skipping."); continue
+        if not os.path.exists(file_path): print(f"Warn: Input file not found (pre-scan): {file_path}."); continue
         try:
-            with open(file_path, "r", encoding="utf-8", errors='ignore') as f: content = f.read()
-            # Split into games
-            games_in_file = re.split(r'\n\s*\n(?=\[Event)', content.strip())
-            if games_in_file and games_in_file[0]: # Ensure non-empty and valid first game
-                 all_raw_games.extend(games_in_file)
-                 total_games_found += len(games_in_file)
-            elif content.strip().startswith("[Event "): # Handle file with only one game
-                 all_raw_games.append(content.strip())
-                 total_games_found += 1
+            with open(file_path, "r", encoding="utf-8", errors='ignore') as f:
+                count = sum(1 for line in f if line.startswith('[Event '))
+                total_games += count
+        except Exception as e: print(f"Warn: Could not pre-read {file_path} to count games: {e}")
+    if total_games > 0: print(f"Found approx {total_games} games.")
+    else: print("Warn: No games detected or files empty.")
 
-        except Exception as e: print(f"Warning: Could not read/split file {file_path}: {e}")
+    # --- Process Files with tqdm ---
+    all_games = []; total_stats = {}
+    with tqdm(total=total_games, unit="game", desc="Processing Games", disable=(total_games == 0)) as pbar:
+        for file_path in args.input_files:
+            if not os.path.exists(file_path): continue
+            pbar.set_description(f"Processing {os.path.basename(file_path)}")
+            try:
+                 games, file_stats = process_file(file_path, args, engine, cache, pbar) # Pass pbar
+                 all_games.extend(games)
+                 for key, value in file_stats.items(): total_stats[key] = total_stats.get(key, 0) + value
+            except Exception as e:
+                 pbar.set_description(f"ERROR in {os.path.basename(file_path)}")
+                 print(f"\n--- CRITICAL ERROR processing {file_path}: {e} ---")
+                 import traceback; traceback.print_exc()
+                 print("Attempting to continue...")
 
-    if not all_raw_games: print("Error: No games found in any input file."); return
-    print(f"Found {total_games_found} games to process across all files.")
-
-    # --- Initialize Worker Pool ---
-    num_workers = args.num_workers if args.num_workers else os.cpu_count()
-    print(f"Using {num_workers} worker processes.")
-
-    # Prepare task data for each game
-    tasks = []
-    # Create a copy of the cache for each task to avoid race conditions if passed directly
-    # Passing large dicts repeatedly can be slow, but safer than direct sharing without Manager
-    initial_cache_copy = main_cache.copy() # Make one copy here
-    for raw_game in all_raw_games:
-         task_data = {
-              'raw_game': raw_game,
-              'args': args, # Pass command line args
-              'cache_copy': initial_cache_copy.copy() # Give each task its own copy
-              # Engine path passed separately to initializer
-         }
-         tasks.append(task_data)
-    del initial_cache_copy # Free memory of the intermediate copy
-
-    all_processed_games = []
-    total_stats = { k: 0 for k in ["games_processed", "games_filtered_out", "moves_total", "invalid_san_skipped", "moves_with_pgn_eval", "moves_validated", "moves_mismatch", "moves_recomputed", "moves_missing_eval"] }
-    updated_caches_from_workers = [] # List to store final cache state from each task
-
-    # Determine engine path for initializer
-    engine_path = args.stockfish_path if args.stockfish_path and os.path.exists(args.stockfish_path) else None
-
-    # --- Run Tasks in Parallel ---
-    print("Starting parallel processing...")
-    # Use try/finally to ensure engine cleanup even on errors
-    try:
-        with concurrent.futures.ProcessPoolExecutor(max_workers=num_workers, initializer=initialize_worker_engine, initargs=(engine_path,)) as executor:
-            # Use tqdm with as_completed for progress updates as tasks finish
-            futures = [executor.submit(process_single_game_worker, task) for task in tasks]
-            for future in tqdm(concurrent.futures.as_completed(futures), total=len(tasks), unit="game", desc="Processing"):
-                try:
-                    result = future.result()
-                    if result:
-                        game_json, game_stats, worker_cache_state = result
-                        if game_json: # Check if game wasn't filtered out
-                            all_processed_games.append(game_json)
-                        # Aggregate stats
-                        for key, value in game_stats.items():
-                            total_stats[key] = total_stats.get(key, 0) + value
-                        # Store the returned cache state for later merging
-                        updated_caches_from_workers.append(worker_cache_state)
-
-                    # Explicitly delete task data and result to free memory sooner
-                    del result
-                    gc.collect() # Suggest garbage collection
-
-                except Exception as exc:
-                    print(f'\n--- Worker Error: Game processing generated an exception: {exc} ---')
-                    # Optional: Log the specific task data that failed
-                    # traceback.print_exc() # More detailed traceback
-    finally:
-         # Ensure worker engines are closed (though ProcessPoolExecutor shutdown should handle this)
-         # Calling it explicitly might be redundant but safer if executor shutdown is unclean
-         # This won't actually run in the worker processes from here. Cleanup needs initializer/finalizer pattern or happens on exit.
-         # Relying on ProcessPoolExecutor shutdown is standard.
-         pass
-
-    # --- Merge Caches ---
-    print(f"\nMerging cache data from {len(updated_caches_from_workers)} results...")
-    # Start with the initially loaded cache
-    final_cache = main_cache
-    for worker_cache in updated_caches_from_workers:
-         merge_caches(final_cache, worker_cache)
-    print(f"Final cache size: {len(final_cache)} entries.")
-    del updated_caches_from_workers # Free memory
-    gc.collect()
+    # --- Engine Shutdown ---
+    if engine:
+        try: engine.quit(); print("Stockfish engine shut down.")
+        except chess.engine.EngineTerminatedError: pass
 
     # --- Cache Saving ---
-    if cache_file and args.stockfish_path: # Check engine path again
+    if cache_file and args.stockfish_path and engine is not None:
          try:
-             print(f"Saving {len(final_cache)} evaluations to cache: {cache_file}")
-             with open(cache_file, "w") as f: json.dump(final_cache, f) # Save the final merged cache
-         except Exception as e: print(f"Error saving final cache file {cache_file}: {e}")
+             with open(cache_file, "w") as f: json.dump(cache, f)
+             print(f"Saved {len(cache)} evals to cache: {cache_file}")
+         except Exception as e: print(f"Error saving cache {cache_file}: {e}")
 
     # --- Write Output ---
     output_file = args.output_file
-    if not all_processed_games: print("\nNo games processed successfully. No output file written."); return
-    print(f"\nWriting {len(all_processed_games)} processed games to {output_file}...")
-    # ... (output writing logic as before using all_processed_games) ...
+    if not all_games: print("\nNo games processed successfully. No output file written."); return # Changed message slightly
+    print(f"\nWriting {len(all_games)} processed games to {output_file}...")
     try:
         output_dir = os.path.dirname(output_file)
         if output_dir and not os.path.exists(output_dir): os.makedirs(output_dir)
         if args.jsonl:
             with open(output_file, "w", encoding="utf-8") as f:
-                for game in all_processed_games: f.write(json.dumps(game) + "\n")
+                for game in all_games: f.write(json.dumps(game) + "\n")
         else:
-            with open(output_file, "w", encoding="utf-8") as f: json.dump(all_processed_games, f, indent=2)
+            with open(output_file, "w", encoding="utf-8") as f: json.dump(all_games, f, indent=2)
         print(f"✅ Successfully saved output to {output_file}")
-    except Exception as e: print(f"❌ Error writing output file {output_file}: {e}")
-
+    except Exception as e: print(f"❌ Error writing {output_file}: {e}")
 
     # --- Print Aggregated Stats ---
     print("\n--- Aggregated Statistics ---")
-    # ... (stats printing logic as before using total_stats) ...
     if total_stats:
-        stat_order = ["games_processed", "games_filtered_out", "moves_total", "invalid_san_skipped", "moves_with_pgn_eval", "moves_validated", "moves_mismatch", "moves_recomputed", "moves_missing_eval"]
-        # Add the count of games found across all files
-        total_stats["total_games_found_across_files"] = total_games_found
-        stat_order.insert(0, "total_games_found_across_files")
-
+        stat_order = [
+            "total_games_found_across_files", "games_filtered_out", "games_skipped_parsing_error", # Added skipped count
+            "games_processed", "moves_total", "invalid_san_skipped",
+            "moves_with_pgn_eval", "moves_validated", "moves_mismatch",
+            "moves_recomputed", "moves_missing_eval"
+            ]
+        total_stats["total_games_found_across_files"] = total_games # Add this for display
         for key in stat_order:
-             if key in total_stats:
-                 key_formatted = key.replace('_', ' ').title()
-                 print(f"{key_formatted}: {total_stats[key]}")
+             if key in total_stats: print(f"{key.replace('_', ' ').title()}: {total_stats[key]}")
         for key, value in total_stats.items(): # Print any extras
             if key not in stat_order: print(f"{key.replace('_', ' ').title()}: {value}")
-    else: print("No statistics aggregated.");
+    else: print("No stats aggregated.");
     print("-" * 27)
 
-
+# --- Argparse Setup (Unchanged) ---
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Parse PGN files to JSON (in parallel) with UCI, annotations, and optional Stockfish validation.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
-        )
-    # --- Input/Output Args (as before) ---
-    parser.add_argument("input_files", nargs="+", help="One or more input PGN files.")
-    parser.add_argument("-o", "--output-file", required=True, help="Output file path for JSON or JSONL.")
-    parser.add_argument("--jsonl", action="store_true", help="Output as JSON Lines.")
-
-    # --- Filtering Args (as before) ---
+    parser = argparse.ArgumentParser(description="Parse PGN files to JSON...", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("input_files", nargs="+", help="Input PGN files.")
+    parser.add_argument("-o", "--output-file", required=True, help="Output JSON/JSONL file.")
+    parser.add_argument("--jsonl", action="store_true", help="Output JSON Lines.")
     filter_group = parser.add_argument_group('Filtering Options')
     filter_group.add_argument("--skip-unfinished", action="store_true", help="Skip games with Result '*'.")
     filter_group.add_argument("--only-standard", action="store_true", help="Keep only Variant 'Standard'.")
     filter_group.add_argument("--only-complete", action="store_true", help="Keep only 1-0, 0-1, 1/2-1/2 results.")
-    filter_group.add_argument("--min-elo", type=int, default=None, metavar='ELO', help="Min Elo for both players.")
-    filter_group.add_argument("--max-elo", type=int, default=None, metavar='ELO', help="Max Elo for both players.")
-
-    # --- Stockfish Args (as before) ---
+    filter_group.add_argument("--min-elo", type=int, default=None, metavar='ELO', help="Min Elo for players.")
+    filter_group.add_argument("--max-elo", type=int, default=None, metavar='ELO', help="Max Elo for players.")
     sf_group = parser.add_argument_group('Stockfish Validation/Computation')
-    sf_group.add_argument("--stockfish-path", default=None, metavar='PATH', help="Path to Stockfish executable.")
+    sf_group.add_argument("--stockfish-path", default=None, metavar='PATH', help="Path to Stockfish.")
     sf_group.add_argument("--analysis-time", type=float, default=0.1, metavar='SEC', help="Stockfish time per move.")
-    sf_group.add_argument("--mismatch-threshold", type=float, default=50.0, metavar='CP', help="Eval mismatch tolerance (centipawns).")
-    sf_group.add_argument("--overwrite-eval", action="store_true", help="Replace PGN eval with Stockfish eval.")
+    sf_group.add_argument("--mismatch-threshold", type=float, default=50.0, metavar='CP', help="Eval mismatch tolerance.")
+    sf_group.add_argument("--overwrite-eval", action="store_true", help="Replace PGN eval with Stockfish.")
     sf_group.add_argument("--abort-on-mismatch", action="store_true", help="Stop on first eval mismatch.")
-    sf_group.add_argument("--cache-dir", default=None, metavar='DIR', help="Directory for eval cache file 'eval_cache.json'.")
-
-    # --- <<< NEW Parallelism Argument >>> ---
-    parser.add_argument("--num-workers", type=int, default=None, metavar='CORES',
-                        help="Number of worker processes to use. Defaults to system CPU count.")
-
+    sf_group.add_argument("--cache-dir", default=None, metavar='DIR', help="Directory for 'eval_cache.json'.")
     args = parser.parse_args()
-
-    # --- Input validation (as before) ---
     valid_inputs = True
-    # ... (existing validation for input_files, output_file, stockfish_path) ...
-    if not args.input_files: print("Error: No input files provided."); valid_inputs = False
-    if not args.output_file: print("Error: Output file path required."); valid_inputs = False
-    if args.stockfish_path and not os.path.isfile(args.stockfish_path): print(f"Error: Stockfish path not found: {args.stockfish_path}. Disabling SF."); args.stockfish_path = None
-
-    if valid_inputs:
-        # Run the main parallel processing function
-        main(args)
-    else:
-        print("\nExiting due to input errors.")
+    if not args.input_files: print("Error: No input files."); valid_inputs = False
+    if not args.output_file: print("Error: Output file required."); valid_inputs = False
+    if args.stockfish_path and not os.path.isfile(args.stockfish_path): print(f"Error: Stockfish not found: {args.stockfish_path}. Disabling SF."); args.stockfish_path = None
+    if valid_inputs: main(args)
+    else: print("\nExiting due to input errors.")
