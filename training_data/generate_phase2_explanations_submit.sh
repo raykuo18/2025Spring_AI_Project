@@ -12,8 +12,8 @@ PHASE=$2
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
-#SBATCH --output=/home/skuo/test_out_%j.txt
-#SBATCH --error=/home/skuo/test_err_%j.txt
+#SBATCH --output=/home/skuo/test_out_${PHASE}_%j.txt
+#SBATCH --error=/home/skuo/test_err_${PHASE}_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
 #SBATCH --gres=gpu:${NUM_GPUS}
