@@ -12,7 +12,7 @@ sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
 #SBATCH --output=/home/skuo/out_phase1_training_%j.txt
-#SBATCH --error=/home/skuo/er_phase1_training_%j.txt
+#SBATCH --error=/home/skuo/err_phase1_training_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
 #SBATCH --gres=gpu:${NUM_GPUS}
