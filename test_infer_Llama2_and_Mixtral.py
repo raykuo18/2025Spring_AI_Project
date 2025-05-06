@@ -4,7 +4,7 @@ from auto_gptq import AutoGPTQForCausalLM
 
 def benchmark_llama2():
     print("\n=== Benchmark: LLaMA 2 65B q4_k_m ===")
-    model_path = "./models/llama-2-65b-gptq"
+    model_path = "./models/Llama2_65B_GPTQ"
 
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
     model = AutoGPTQForCausalLM.from_quantized(
@@ -31,7 +31,7 @@ def benchmark_llama2():
 
 def benchmark_mixtral():
     print("\n=== Benchmark: Mixtral 8x7B ===")
-    model_path = "./models/mixtral-8x7b-instruct"
+    model_path = "./models/Mixtral"
 
     tokenizer = AutoTokenizer.from_pretrained(model_path, use_fast=True)
     model = AutoModelForCausalLM.from_pretrained(
