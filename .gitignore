@@ -14,6 +14,9 @@ api_key/**
 /training_data/phase1
 /training_data/phase2
 /training_data/*.csv
+/training_data/*.json
+/training_data/*.txt
+/training_data/cache
 /base_model
 /lora_adapter
 /models

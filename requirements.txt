@@ -1,21 +1,56 @@
-transformers
-accelerate
-datasets
-python-chess
-stockfish
-ctransformers
-torch
-openai
-pandas
-nltk
-rouge-score
-tqdm
-bert-score
-peft
-bitsandbytes
-numpy
-# Cluster requirements
-huggingface_hub
-llama-cpp-python
-sentence-transformers
-auto-gptq
+# --- Core PyTorch and CUDA ---
+# Ensure this matches your CUDA 12.1. Use the official PyTorch website to get the correct command.
+torch>=2.1.0 --index-url https://download.pytorch.org/whl/cu121 # Or newer (e.g., 2.2, 2.3 if stable)
+# torchvision torchaudio # Often bundled, include if you have direct uses for them
+
+# --- Hugging Face Ecosystem (Essential for your LLM tasks) ---
+transformers>=4.38.0 # Keep very up-to-date for latest features, models, and optimizations like sdpa
+accelerate>=0.27.0   # Crucial for multi-GPU (device_map="auto") and other training/inference utilities
+datasets             # For loading and processing datasets if you fine-tune or evaluate
+huggingface_hub      # For interacting with the Hugging Face Hub (downloading models, etc.)
+safetensors          # Often a dependency for secure model weight handling
+
+# --- Quantization & Performance ---
+bitsandbytes>=0.42.0 # For 4-bit/8-bit quantization (NF4, etc.). Ensure compatibility with your CUDA version.
+auto-gptq>=0.7.0     # For running GPTQ quantized models. Keep up-to-date for new features/kernels.
+                     # Consider a specific build if available for your CUDA version if generic pip install has issues.
+# optimum>=1.17.0    # For advanced model optimization, export to ONNX, and some specific hardware acceleration (e.com/NVIDIA/FasterTransformer).
+                     # Also, some AutoGPTQ backends (like exllamav2) might leverage optimum.
+peft>=0.9.0          # Parameter-Efficient Fine-Tuning (LoRA, etc.), if you plan to fine-tune
+# flash-attn         # Optional: For FlashAttention v1 on V100s. Install with --no-build-isolation.
+                     # Test carefully against 'sdpa'. Might not be necessary.
+# xformers           # Optional: Another library for optimized attention mechanisms.
+                     # Was more critical before PyTorch 2.0's 'sdpa'. Can sometimes still offer benefits.
+
+# --- GGUF Model Execution (Alternative to Hugging Face Transformers for some models) ---
+ctransformers        # For running GGUF quantized models (often used with llama.cpp).
+                     # Can be CPU or GPU accelerated. Ensure you install with CUDA support if using on GPU:
+                     # CMAKE_ARGS="-DCMAKE_CUDA_ARCHITECTURES=70" pip install ctransformers --no-binary ctransformers
+                     # (70 is for Volta - V100. Adjust if necessary)
+
+# --- NLP Evaluation & Utilities ---
+nltk                 # Natural Language Toolkit for text processing tasks
+rouge-score          # For ROUGE evaluation metric (summarization, etc.)
+bert-score           # For BERTScore evaluation metric (semantic similarity)
+sentence-transformers # For generating sentence embeddings
+tqdm                 # For progress bars, very useful
+
+# --- Data Handling ---
+pandas               # For data manipulation and analysis (DataFrames)
+numpy                # Fundamental package for numerical computation
+
+# --- API Access ---
+openai               # If you are using OpenAI APIs
+
+# --- Application Specific (Chess related) ---
+python-chess         # For chess logic in Python
+stockfish            # Python wrapper for the Stockfish chess engine
+
+# --- Potentially Missing (Consider if relevant) ---
+# tensorboard        # For logging and visualizing training runs (if you get into fine-tuning)
+# wandb              # Weights & Biases: Another popular tool for experiment tracking & visualization
+
+# --- General Good Practices ---
+# Consider using a virtual environment (venv, conda) to manage these dependencies.
+# Regularly update packages, but test after updates as breaking changes can occur.
+# You can pin versions (e.g., transformers==4.38.1) once you have a stable setup.
