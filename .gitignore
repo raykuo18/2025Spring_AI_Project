@@ -16,3 +16,4 @@ api_key/**
 /training_data/*.csv
 /base_model
 /lora_adapter
+/models
