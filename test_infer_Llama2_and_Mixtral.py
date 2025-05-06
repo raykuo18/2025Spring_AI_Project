@@ -1,3 +1,35 @@
+"""
+Benchmark script for evaluating inference performance of quantized LLaMA 2 (65B) and Mixtral 8x7B models.
+
+This script runs two separate benchmarks:
+  1. LLaMA 2 65B quantized with GPTQ on 2 GPUs.
+  2. Mixtral 8x7B (MoE) quantized using 4-bit `BitsAndBytes` on 2 GPUs.
+
+Each benchmark performs the following:
+  - Loads the model and tokenizer from a specified local or remote path.
+  - Runs a single prompt through the model using `generate()`.
+  - Measures total inference time, tokens generated, and throughput (tokens/sec).
+  - Prints diagnostic information including memory footprint, dtype, and device mapping.
+
+Requirements:
+  - PyTorch with multi-GPU support
+  - `transformers`, `auto-gptq`, and `bitsandbytes`
+  - Properly quantized model files in the expected paths
+
+Example:
+  $ python test_infer_Llama2_and_Mixtral.py
+
+Note:
+  - This script is intended for research or hardware benchmarking purposes.
+  - Ensure that the models are downloaded and accessible at the specified paths.
+
+Author(s):
+    - Shang-Jui (Ray) Kuo
+    - Adebayo Braimah (documentation)
+    
+Date: 2025
+"""
+
 import time
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM, BitsAndBytesConfig

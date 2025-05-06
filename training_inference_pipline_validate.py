@@ -1,3 +1,47 @@
+"""Script for downloading a Hugging Face causal language model, applying a LoRA (Low-Rank Adaptation) adapter,
+saving both the base and adapter models locally, and preparing for conversion to GGUF format.
+
+This script supports three model architectures:
+    - TinyLLaMA
+    - Gemma-2B
+    - Phi-2
+
+Steps performed:
+    1. Selects and loads the specified model and tokenizer from Hugging Face.
+    2. Saves the base model and tokenizer locally in Hugging Face format.
+    3. Applies a LoRA adapter to attention projection modules (`q_proj`, `v_proj`).
+    4. Saves only the LoRA adapter weights for efficient parameter-efficient fine-tuning (PEFT).
+    5. Prints trainable parameter count for inspection.
+    6. Outputs shell and web instructions for converting to the GGUF format used by llama.cpp.
+
+Attributes:
+    model_name (str): Specifies which base model to use. Must be one of {"TinyLLaMA", "Gemma-2B", "Phi-2"}.
+    HF_MODEL_NAME (str): Hugging Face model identifier based on `model_name`.
+    TARGET_MODULES (List[str]): List of attention modules targeted by LoRA.
+    HF_CACHE_DIR (str): Directory to cache Hugging Face models locally.
+    BASE_MODEL_DIR (str): Path to store the full base model and tokenizer.
+    LORA_ADAPTER_DIR (str): Path to store the LoRA adapter weights.
+
+Requirements:
+    - `transformers` library from Hugging Face
+    - `peft` library for LoRA/PEFT support
+    - Local write permissions to cache and output directories
+
+Example:
+    To use TinyLLaMA:
+        Set `model_name = "TinyLLaMA"` at the top of the script and run.
+
+Next Steps (printed at runtime):
+    1. Convert base model to GGUF using `convert-hf-to-gguf.py` from `llama.cpp`.
+    2. Convert LoRA adapter to GGUF using the Hugging Face web UI.
+    3. Optionally quantize the GGUF model for efficient inference.
+
+Author(s):
+    - Shang-Jui (Ray) Kuo
+    - Adebayo Braimah (documentation)
+Date:
+    May 2025
+"""
 from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import get_peft_model, LoraConfig
 import os
