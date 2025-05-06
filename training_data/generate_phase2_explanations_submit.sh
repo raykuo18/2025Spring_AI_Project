@@ -19,7 +19,7 @@ EVERY=$5
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
-#SBATCH --output=/home/skuo/test_out_${PHASE}_${START}%j.txt
+#SBATCH --output=/home/skuo/test_out_${PHASE}_${START}_%j.txt
 #SBATCH --error=/home/skuo/test_err_${PHASE}_${START}_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
