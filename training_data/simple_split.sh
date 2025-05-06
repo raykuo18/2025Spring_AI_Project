@@ -1,1 +1,1 @@
-python simple_split.py broadcasts.json --output-folder ./phase1 --seed 99
+python simple_split.py broadcasts_v2.json --output-folder ./phase1 --seed 99
