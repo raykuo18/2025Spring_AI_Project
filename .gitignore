@@ -9,6 +9,10 @@ api_key/**
 /llama.cpp
 /pretrained_cache
 /.vscode
-/training_data
+/training_data/chess_data
+/training_data/lichess_database
+/training_data/phase1
+/training_data/phase2
+/training_data/*.csv
 /base_model
 /lora_adapter

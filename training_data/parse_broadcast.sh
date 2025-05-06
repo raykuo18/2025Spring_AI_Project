@@ -1,10 +1,10 @@
 python parse_broadcast.py \
-    --input-files lichess_database/broadcasts/lichess_db_broadcast_2025-01.pgn \
-    --output-file games.json \
-    --skip-unfinished --only-standard --only-complete
-
-
-
-    # lichess_database/broadcasts/lichess_db_broadcast_2025-02.pgn \
-    # lichess_database/broadcasts/lichess_db_broadcast_2025-03.pgn \
-    # lichess_database/broadcasts/lichess_db_broadcast_2025-04.pgn \
+    --output-file result.json \
+    --stockfish-path ../src/stockfish/stockfish-macos-m1-apple-silicon \
+    --cache-dir cache \
+    --only-standard \
+    --only-complete \
+    --skip-unfinished \
+    --mismatch-threshold 30 \
+    --analysis-time 0.1 \
+    lichess_database/broadcasts/lichess_db_broadcast_2025-01.pgn
