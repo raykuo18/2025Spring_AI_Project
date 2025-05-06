@@ -6,14 +6,21 @@ if [ -z "$1" ]; then
   exit 1
 fi
 
+# Command to submit:
+# $ ./generate_phase2_explanations_submit.sh {GPUs} {PHASE} {START} {NUM} {SAVE_EVERY}
+
 NUM_GPUS=$1
 PHASE=$2
+
+START=$3
+NUM=$4
+EVERY=$5
 
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
-#SBATCH --output=/home/skuo/test_out_${PHASE}_%j.txt
-#SBATCH --error=/home/skuo/test_err_${PHASE}_%j.txt
+#SBATCH --output=/home/skuo/test_out_${PHASE}_${START}%j.txt
+#SBATCH --error=/home/skuo/test_err_${PHASE}_${START}_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
 #SBATCH --gres=gpu:${NUM_GPUS}
@@ -32,7 +39,9 @@ python generate_phase2_explanations.py \
     --input-prompts-file phase2/prompts_${PHASE}.jsonl \
     --output-training-folder phase2/${PHASE}/ \
     --model-name-or-path "../models/Mixtral" \
+    --slice-start-index ${START} \
+    --slice-num-samples ${NUM} \
+    --checkpoint-every ${EVERY} \
     --batch-size 4 \
-    --num-samples 6 \
-    --checkpoint-every 2
+    --max-new-tokens 120
 EOT
