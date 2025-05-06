@@ -33,6 +33,5 @@ python generate_phase2_explanations.py \
     --output-training-folder phase2/${PHASE}/ \
     --model-name-or-path "../models/Mixtral" \
     --batch-size 4 \
-    --num-samples 3 \
-    --checkpoint-every 3
+    --checkpoint-every 100
 EOT
