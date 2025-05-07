@@ -59,5 +59,10 @@ python phase1_training.py \
     --load_in_4bit \
     --max_train_samples 600000 \
     --max_val_samples 200000 \
-    --max_test_samples 200000
+    --max_test_samples 200000 \
+    # --- New/Recommended arguments from the latest script version ---
+    --gradient_checkpointing \
+    # --gradient_checkpointing_use_reentrant False # This is already the default in the script's argparse
+    # --vram_log_multiplier 1 # Optional: To control VRAM logging frequency relative to logging_steps. Default is 1.
+    # --use_flash_attention_2 # Only if NOT using --load_in_4bit and your setup supports it
 EOT
