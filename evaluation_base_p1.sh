@@ -11,8 +11,8 @@ NUM_GPUS=$1
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
-#SBATCH --output=/home/skuo/out_evaluation_%j.txt
-#SBATCH --error=/home/skuo/err_evaluation_%j.txt
+#SBATCH --output=/home/skuo/out_base_p1_%j.txt
+#SBATCH --error=/home/skuo/err_base_p1_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
 #SBATCH --gres=gpu:${NUM_GPUS}
@@ -30,15 +30,14 @@ cd /home/skuo/2025Spring_AI_Project
 
 python evaluation.py \
     --model_name "TinyLLaMA" \
-    --lora_adapter_path training_output/tinyllama_phase1/TinyLLaMA_07070558/checkpoint-1000 \
     --test_file training_data/phase1/test.jsonl \
     --stockfish_path ../stockfish/stockfish-ubuntu-x86-64 \
-    --output_results_file ./evaluation_results/tinyllama_phase1_adapter_eval.json \
+    --output_results_file ./evaluation_results/tinyllama_base_p1_eval.json \
     --base_model_cache_dir ./hf_cache \
     --stockfish_analysis_time 0.5 \
     --top_k_agreement 1 3 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
-    --max_eval_samples 16 \
+    --max_eval_samples 100 \
     --max_seq_length 1024 \
     --batch_size 8 \
     --load_in_4bit \
