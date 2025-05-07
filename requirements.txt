@@ -16,7 +16,12 @@ peft
 bitsandbytes
 numpy
 PyQt5
+gguf
 # llama-cpp-python # NOTE: Use these directions from here for MacOS: https://llama-cpp-python.readthedocs.io/en/latest/install/macos/
 
 # HuggingFace
 huggingface-hub
+
+# RL
+gymnasium
+stable-baselines3
