@@ -39,7 +39,7 @@ python phase1_training.py \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
     --num_train_epochs 3 \
-    --per_device_train_batch_size 2 \
+    --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 4 \
     --learning_rate 2e-4 \
@@ -57,9 +57,9 @@ python phase1_training.py \
     --report_to "tensorboard" \
     --seed 42 \
     --load_in_4bit \
-    --max_train_samples 600000 \
-    --max_val_samples 200000 \
-    --max_test_samples 200000 \
+    --max_train_samples 6000 \
+    --max_val_samples 200 \
+    --max_test_samples 200 \
     # --- New/Recommended arguments from the latest script version ---
     --gradient_checkpointing \
     # --gradient_checkpointing_use_reentrant False # This is already the default in the script's argparse
