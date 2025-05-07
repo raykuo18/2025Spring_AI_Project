@@ -13,6 +13,7 @@ api_key/**
 /training_data/lichess_database
 /training_data/phase1
 /training_data/phase2
+/training_data/phase2_copy
 /training_data/*.csv
 /training_data/*.json
 /training_data/*.txt
