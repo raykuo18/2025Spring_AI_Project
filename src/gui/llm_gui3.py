@@ -389,6 +389,7 @@ class MainWindow(QMainWindow):
         except:
             pass
         # fallback random move
+        # TODO: inference again from LLM
         return random.choice(list(self.board.legal_moves))
 
     def explain_move(self, move: chess.Move, player: str) -> str:
