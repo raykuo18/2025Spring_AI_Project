@@ -22,4 +22,5 @@ api_key/**
 /lora_adapter
 /models
 /hf_cache
+/training_output
 
