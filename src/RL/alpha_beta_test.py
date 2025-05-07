@@ -31,6 +31,8 @@ from gymnasium import spaces
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_checker import check_env
 
+# TODO: Add support for TensorBoard
+
 # --------------------------------------------------------------------------- #
 #  0.  Import your α–β generator (from quick_test.py or chess_tutor.py)
 # --------------------------------------------------------------------------- #
