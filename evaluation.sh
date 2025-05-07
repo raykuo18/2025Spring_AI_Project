@@ -32,7 +32,7 @@ python evaluation.py \
     --model_name "TinyLLaMA" \
     --lora_adapter_path training_output/tinyllama_phase1/TinyLLaMA_07070558/checkpoint-1000 \
     --test_file training_data/phase1/test.jsonl \
-    --stockfish_path ../stockfish/stockfish-ubuntu-x86-64-avx2 \
+    --stockfish_path ../stockfish/stockfish-ubuntu-x86-64 \
     --output_results_file ./evaluation_results/tinyllama_phase1_adapter_eval.json \
     --base_model_cache_dir ./hf_cache \
     --stockfish_analysis_time 0.5 \
