@@ -32,9 +32,9 @@ cd /home/skuo/2025Spring_AI_Project
 python phase2_training.py \
     --model_name "TinyLLaMA" \
     --phase1_adapter_path training_output/tinyllama_phase1/TinyLLaMA_06225337/final_lora_adapter \
-    --train_folder training_data/phase2/train/ \
-    --val_folder training_data/phase2/val/ \
-    --test_folder training_data/phase2/test/ \
+    --train_folder training_data/phase2_corrected/train/ \
+    --val_folder training_data/phase2_corrected/val/ \
+    --test_folder training_data/phase2_corrected/test/ \
     --tokenized_data_path training_data/phase2/ \
     --output_dir ./training_output/tinyllama_phase2_explainer_scratch \
     --base_model_cache_dir ./hf_cache \
