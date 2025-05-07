@@ -3,9 +3,8 @@
 **.pptx
 **.potx
 api_key/**
+__pycache__
 
 .env
-
 *.gguf
-
 .DS_Store
