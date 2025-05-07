@@ -8,21 +8,23 @@ import numpy as np
 import torch
 import chess
 import chess.engine
-from datasets import load_dataset, Dataset
+from datasets import load_dataset, Dataset # Keep Dataset for type hint
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from peft import PeftModel
 from tqdm import tqdm
 from bert_score import score as bert_score_calculate # BERTScore
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Set # Added Set
+import sys # For sys.exit()
+import glob # For loading cache parts if needed in future
 
 # --- Model Configuration Mapping (can be shared with training script) ---
 MODEL_CONFIGS = {
     "TinyLLaMA": {
         "hf_model_name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-        "add_eos_token": True,
+        "add_eos_token": True, # From training script
     },
     "Gemma-2B": {
-        "hf_model_name": "google/gemma-2b",
+        "hf_model_name": "google/gemma-2b", # or "google/gemma-2b-it"
         "add_eos_token": True,
     },
     "Phi-2": {
@@ -31,82 +33,73 @@ MODEL_CONFIGS = {
     }
 }
 
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
 def get_stockfish_analysis(board: chess.Board, engine: chess.engine.SimpleEngine, 
                            time_limit: Optional[float] = None, depth_limit: Optional[int] = None, 
                            multipv: int = 3) -> Dict[str, Any]:
     """Gets Stockfish analysis for a given board position."""
     limit = None
-    if time_limit:
-        limit = chess.engine.Limit(time=time_limit)
-    elif depth_limit:
-        limit = chess.engine.Limit(depth=depth_limit)
-    else: # Default if neither is provided
-        limit = chess.engine.Limit(time=0.1) # Default to a quick analysis
+    if time_limit: limit = chess.engine.Limit(time=time_limit)
+    elif depth_limit: limit = chess.engine.Limit(depth=depth_limit)
+    else: limit = chess.engine.Limit(time=0.1) 
 
+    results = {"top_moves_uci": [], "top_moves_san": [], "scores_cp_after_move": [], "current_eval_cp_white_pov": None}
     try:
-        info_list = engine.analyse(board, limit, multipv=multipv) # Get top N moves
-        
-        results = {"top_moves_uci": [], "top_moves_san": [], "scores_cp": []}
-        if not info_list:
-            # print(f"Warning: Stockfish returned no analysis for FEN: {board.fen()}")
-            return results
+        # Get current board evaluation first
+        # Use a very shallow search for current eval to be quick, or rely on PV's score
+        initial_analysis = engine.analyse(board, chess.engine.Limit(depth=5, time=0.05)) # Quick eval of current pos
+        if initial_analysis and initial_analysis.get("score"):
+            results["current_eval_cp_white_pov"] = initial_analysis["score"].white().score(mate_score=10000)
 
-        # Current position evaluation (from White's perspective) from the first PV
-        current_eval_white_pov = info_list[0].get("score").white().score(mate_score=10000) if info_list[0].get("score") else None
-        results["current_eval_cp_white_pov"] = current_eval_white_pov
-
+        # Get top moves and their expected scores
+        info_list = engine.analyse(board, limit, multipv=multipv)
+        if not info_list: return results
 
         for info in info_list:
             if "pv" in info and info["pv"]:
                 move = info["pv"][0]
                 results["top_moves_uci"].append(move.uci())
-                try:
-                    results["top_moves_san"].append(board.san(move))
-                except ValueError: # If SAN is ambiguous without full context
-                    results["top_moves_san"].append(board.variation_san([move]))
-
-
-                # Score of the position *after* this PV move
-                # We need to make the move on a temp board and re-evaluate for SSD accurately
-                # Or, use the score provided in the multipv info if it represents score *after* the move
-                # The score in multipv usually is for the current board IF that move is played.
+                try: results["top_moves_san"].append(board.san(move))
+                except ValueError: results["top_moves_san"].append(board.variation_san([move]))
+                
                 score_obj = info.get("score")
                 if score_obj:
-                    # Ensure score is from White's perspective for consistency
-                    score_cp_white_pov = score_obj.white().score(mate_score=10000)
-                    results["scores_cp"].append(score_cp_white_pov) 
+                    # This score is the evaluation of the *current position* if this PV line is played
+                    results["scores_cp_after_move"].append(score_obj.white().score(mate_score=10000))
                 else:
-                    results["scores_cp"].append(None) # Should not happen if PV exists
-
+                    results["scores_cp_after_move"].append(None)
         return results
     except (chess.engine.EngineTerminatedError, chess.engine.EngineError, Exception) as e:
         print(f"Stockfish analysis error for FEN {board.fen()}: {e}")
-        return {"top_moves_uci": [], "top_moves_san": [], "scores_cp": []}
+        return results # Return empty or partially filled results
 
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a base model or a LoRA-adapted model on chess tasks.")
     parser.add_argument("--model_name", type=str, required=True, choices=MODEL_CONFIGS.keys(), help="Name of the base model.")
     parser.add_argument("--base_model_cache_dir", type=str, default="./hf_cache", help="Cache dir for Hugging Face models.")
-    parser.add_argument("--lora_adapter_path", type=str, default=None, help="Optional: Path to the LoRA adapter directory (e.g., a checkpoint or final_lora_adapter).")
+    parser.add_argument("--lora_adapter_path", type=str, default=None, help="Optional: Path to the LoRA adapter directory.")
     parser.add_argument("--test_file", type=str, required=True, help="Path to the JSONL test file.")
-    parser.add_argument("--stockfish_path", type=str, required=True, help="Path to Stockfish executable.")
+    parser.add_argument("--stockfish_path", type=str, help="Path to Stockfish executable. Required for move evaluation metrics.")
     parser.add_argument("--stockfish_analysis_time", type=float, default=0.2, help="Time (seconds) for Stockfish analysis per move.")
-    parser.add_argument("--top_k_agreement", type=int, nargs='+', default=[1, 3], help="List of k values for top-k agreement (e.g., 1 3).")
-    parser.add_argument("--bert_score_model_type", type=str, default=None, help="BERT model for BERTScore (e.g., microsoft/deberta-xlarge-mnli). Default uses library's default.")
-    parser.add_argument("--max_eval_samples", type=int, default=None, help="Limit number of test samples for quick evaluation.")
+    parser.add_argument("--top_k_agreement", type=int, nargs='+', default=[1, 3], help="List of k for top-k agreement.")
+    parser.add_argument("--bert_score_model_type", type=str, default=None, help="BERT model for BERTScore. Default: library's default.")
+    parser.add_argument("--max_eval_samples", type=int, default=None, help="Limit number of test samples.")
     parser.add_argument("--max_seq_length", type=int, default=1024, help="Max sequence length for tokenizer.")
     parser.add_argument("--load_in_4bit", action="store_true", help="Load base model in 4-bit (QLoRA style).")
     parser.add_argument("--batch_size", type=int, default=4, help="Batch size for model inference.")
     parser.add_argument("--output_results_file", type=str, default="evaluation_results.json", help="JSON file to save detailed results and metrics.")
     parser.add_argument("--seed", type=int, default=42, help="Random seed for reproducibility.")
 
-
     args = parser.parse_args()
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available(): torch.cuda.manual_seed_all(args.seed)
+    set_seed(args.seed)
 
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {DEVICE}")
@@ -119,7 +112,7 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(hf_model_name, cache_dir=args.base_model_cache_dir, use_fast=True, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-        tokenizer.padding_side = "left" # Important for batch generation
+    tokenizer.padding_side = "left" # Important for batched generation
     print("Tokenizer loaded.")
 
     quantization_config = None
@@ -129,48 +122,47 @@ def main():
     
     print(f"Loading base model: {hf_model_name}...")
     model = AutoModelForCausalLM.from_pretrained(
-        hf_model_name,
-        cache_dir=args.base_model_cache_dir,
-        quantization_config=quantization_config,
-        torch_dtype=torch.bfloat16 if quantization_config else torch.float16, # Use bfloat16 with QLoRA, float16 otherwise for speed
-        device_map="auto"
+        hf_model_name, cache_dir=args.base_model_cache_dir, quantization_config=quantization_config,
+        torch_dtype=torch.bfloat16 if quantization_config else torch.float16, device_map="auto", trust_remote_code=True
     )
-    if model.config.pad_token_id is None:
-        model.config.pad_token_id = tokenizer.pad_token_id
+    if model.config.pad_token_id is None: model.config.pad_token_id = tokenizer.pad_token_id # Use the one set on tokenizer
+    model.eval()
+    print("Base model loaded.")
 
     if args.lora_adapter_path:
         print(f"Loading LoRA adapter from: {args.lora_adapter_path}...")
         if not os.path.isdir(args.lora_adapter_path):
-             # Try if it's a checkpoint subfolder (e.g. checkpoint-1000)
-            if os.path.isdir(os.path.join(args.lora_adapter_path, "adapter_model.safetensors")) or \
-               os.path.isdir(os.path.join(args.lora_adapter_path, "adapter_model.bin")):
-                 # It might be a full trainer checkpoint. PeftModel.from_pretrained should handle it.
-                 pass
-            else:
-                print(f"Error: LoRA adapter path '{args.lora_adapter_path}' not found or not a valid adapter directory.")
-                sys.exit(1)
+            print(f"Error: LoRA adapter path '{args.lora_adapter_path}' not found or not a directory.")
+            sys.exit(1)
         try:
             model = PeftModel.from_pretrained(model, args.lora_adapter_path)
             print("LoRA adapter loaded successfully.")
+            model.eval() # Ensure PEFT model is also in eval mode
         except Exception as e:
-            print(f"Error loading LoRA adapter: {e}. Ensure the path is correct and contains adapter_config.json and adapter_model files.")
-            sys.exit(1)
+            print(f"Error loading LoRA adapter: {e}. Ensure path contains adapter_config.json and weights."); sys.exit(1)
     
-    model.eval() # Set to evaluation mode
     print("Model ready for evaluation.")
 
     # --- 2. Initialize Stockfish Engine ---
     stockfish_engine = None
-    try:
-        stockfish_engine = chess.engine.SimpleEngine.popen_uci(args.stockfish_path)
-        print(f"Stockfish engine initialized from: {args.stockfish_path}")
-    except Exception as e:
-        print(f"Error initializing Stockfish: {e}. Move evaluation metrics will be skipped.")
-        # Proceed without stockfish for explanation tasks if any
+    if args.stockfish_path: # Only initialize if path is given
+        try:
+            stockfish_engine = chess.engine.SimpleEngine.popen_uci(args.stockfish_path)
+            print(f"Stockfish engine initialized from: {args.stockfish_path}")
+        except Exception as e:
+            print(f"Error initializing Stockfish: {e}. Move evaluation metrics will be skipped.")
+    else:
+        print("No Stockfish path provided. Move evaluation metrics (SSD, Top-K) will be skipped.")
+
 
     # --- 3. Load Test Dataset ---
     print(f"Loading test data from: {args.test_file}")
-    raw_dataset = load_dataset("json", data_files=args.test_file, split="train") # Assumes JSONL is a "train" split
+    try:
+        # Assuming JSONL where each line is a dict
+        raw_dataset = load_dataset("json", data_files=args.test_file, split="train")
+    except Exception as e:
+        print(f"Error loading test file {args.test_file}: {e}"); sys.exit(1)
+        
     if args.max_eval_samples is not None and args.max_eval_samples > 0:
         if args.max_eval_samples < len(raw_dataset):
             print(f"Sub-sampling test data to {args.max_eval_samples} samples.")
@@ -179,196 +171,166 @@ def main():
 
     # --- 4. Evaluation Loop ---
     results_per_sample = []
-    # Metrics aggregation
-    total_ssd_sum = 0
-    ssd_count = 0
-    top_k_correct = {k: 0 for k in args.top_k_agreement}
-    move_prediction_count = 0
-    bert_score_preds = []
-    bert_score_refs = []
-    explanation_count = 0
-
-    # Group data by task type if needed, or process all and filter by task later
-    # For now, iterate and dispatch based on task field
+    total_ssd_sum = 0.0; ssd_count = 0
+    top_k_correct = {k: 0 for k in args.top_k_agreement}; move_prediction_count = 0
+    bert_score_preds, bert_score_refs = [], []; explanation_count = 0
     
-    # Prepare for batching model inference
-    prompts_for_inference = [item['input'] for item in raw_dataset]
-    data_items_for_processing = list(raw_dataset) # To keep original items aligned
+    prompts_for_inference = [item['input'] for item in raw_dataset if 'input' in item]
+    data_items_for_processing = [item for item in raw_dataset if 'input' in item] # Keep original items aligned
+
+    if len(prompts_for_inference) != len(data_items_for_processing):
+        print("Warning: Some items in test data might be missing the 'input' field.")
 
     generated_outputs_text = []
 
-    for i in tqdm(range(0, len(prompts_for_inference), args.batch_size), desc="Model Inference"):
+    for i in tqdm(range(0, len(prompts_for_inference), args.batch_size), desc="Model Inference", ncols=100):
         batch_prompts = prompts_for_inference[i:i + args.batch_size]
+        inputs = tokenizer(batch_prompts, return_tensors="pt", padding=True, truncation=True, max_length=args.max_seq_length).to(model.device) # Ensure on model's primary device
         
-        inputs = tokenizer(batch_prompts, return_tensors="pt", padding=True, truncation=True, max_length=args.max_seq_length).to(DEVICE)
-        
-        max_gen_tokens = 10 # For move prediction (UCI is short)
-        # Check if any prompt in batch is for explanation to adjust max_gen_tokens
-        # This is a simplification; ideally, batch by task type or have adaptive max_gen_tokens
-        if any("explain" in p.lower() for p in batch_prompts):
-            max_gen_tokens = 150 # Longer for explanations
+        # Dynamic max_new_tokens based on task (heuristic)
+        current_batch_items = data_items_for_processing[i:i + args.batch_size]
+        max_gen_tokens_for_batch = MAX_NEW_TOKENS_DEFAULT # For explanations
+        if all("predict_move" in item.get("task", "").lower() for item in current_batch_items):
+            max_gen_tokens_for_batch = 10 # Shorter for UCI moves
             
         with torch.no_grad():
             outputs = model.generate(
-                **inputs,
-                max_new_tokens=max_gen_tokens,
-                eos_token_id=tokenizer.eos_token_id,
-                pad_token_id=tokenizer.pad_token_id,
-                do_sample=False # For deterministic move prediction; use True for creative explanations
+                **inputs, max_new_tokens=max_gen_tokens_for_batch,
+                eos_token_id=tokenizer.eos_token_id, pad_token_id=tokenizer.pad_token_id,
+                do_sample=False # Usually False for eval of prediction, True for creative explanation
             )
         
-        # Decode generated part only
         for k_idx, output_ids_tensor in enumerate(outputs):
-            prompt_len = inputs["input_ids"][k_idx].ne(tokenizer.pad_token_id).sum().item()
+            prompt_len = inputs["attention_mask"][k_idx].sum().item()
             decoded_output = tokenizer.decode(output_ids_tensor[prompt_len:], skip_special_tokens=True)
             generated_outputs_text.append(decoded_output.strip())
 
-
     # Process results
-    for idx, item in enumerate(tqdm(data_items_for_processing, desc="Calculating Metrics")):
+    for idx, item in enumerate(tqdm(data_items_for_processing, desc="Calculating Metrics", ncols=100)):
         task_type = item.get("task", "unknown")
-        input_prompt_str = item["input"] # Student prompt
-        model_generated_output = generated_outputs_text[idx]
-        reference_output = item.get("output") # UCI move or reference explanation
+        input_prompt_str = item["input"]
+        model_generated_output = generated_outputs_text[idx] if idx < len(generated_outputs_text) else "GENERATION_INDEX_ERROR"
+        reference_output = item.get("output")
         current_result = {"task_id": item.get("task_id"), "task_type": task_type, "input_prompt": input_prompt_str, "model_output": model_generated_output, "reference_output": reference_output}
 
         if "predict_move" in task_type and stockfish_engine:
             move_prediction_count += 1
-            # Extract FEN from input_prompt_str
             fen_match = re.search(r"\[FEN\]\s*(.*?)\s*\[SEP\]", input_prompt_str)
             if fen_match:
                 fen = fen_match.group(1).strip()
-                board = chess.Board(fen)
-                
-                # Model's predicted move (already generated)
-                predicted_uci = model_generated_output 
                 try:
-                    model_move = board.parse_uci(predicted_uci)
-                    if model_move not in board.legal_moves: # Check if UCI is legal from current FEN
-                        # print(f"Warning: Model predicted illegal UCI '{predicted_uci}' for FEN '{fen}'. Skipping Stockfish eval for this move.")
-                        current_result["ssd_cp"] = None
-                        current_result["stockfish_top1_uci"] = None
-                        current_result["stockfish_top1_eval_cp"] = None
-                        for k_val in args.top_k_agreement: current_result[f"in_top_{k_val}"] = False
-                        results_per_sample.append(current_result)
-                        continue
-                except ValueError:
-                    # print(f"Warning: Model predicted invalid UCI format '{predicted_uci}'. Skipping Stockfish eval.")
-                    current_result["ssd_cp"] = None; # ... (set other stockfish fields to None)
-                    results_per_sample.append(current_result)
-                    continue
+                    board = chess.Board(fen)
+                    predicted_uci = model_generated_output
+                    model_move_obj = None
+                    try:
+                        model_move_obj = board.parse_uci(predicted_uci)
+                        if model_move_obj not in board.legal_moves:
+                            model_move_obj = None # Treat as illegal if not in legal_moves
+                            # print(f"Warn: Model predicted UCI '{predicted_uci}' not in legal moves for FEN '{fen}'.")
+                    except ValueError: # Invalid UCI format
+                        # print(f"Warn: Model predicted invalid UCI format '{predicted_uci}'.")
+                        pass # model_move_obj remains None
+                    
+                    sf_analysis = get_stockfish_analysis(board, stockfish_engine, time_limit=args.stockfish_analysis_time, multipv=max(args.top_k_agreement))
+                    
+                    if sf_analysis["top_moves_uci"]:
+                        sf_best_move_uci = sf_analysis["top_moves_uci"][0]
+                        # Eval of position *if SF's best move is played*
+                        sf_eval_after_sf_best_cp = sf_analysis["scores_cp_after_move"][0] if sf_analysis["scores_cp_after_move"] else None
+                        current_result["stockfish_top1_uci"] = sf_best_move_uci
+                        current_result["stockfish_top1_eval_cp"] = sf_eval_after_sf_best_cp # This is eval after SF's best move
 
-                # Get Stockfish analysis
-                sf_analysis = get_stockfish_analysis(board, stockfish_engine, time_limit=args.stockfish_analysis_time, multipv=max(args.top_k_agreement, default=3))
-                
-                if sf_analysis["top_moves_uci"]:
-                    sf_best_move_uci = sf_analysis["top_moves_uci"][0]
-                    sf_best_move_eval_cp = sf_analysis["scores_cp"][0] if sf_analysis["scores_cp"] else None
-                    current_result["stockfish_top1_uci"] = sf_best_move_uci
-                    current_result["stockfish_top1_eval_cp"] = sf_best_move_eval_cp
+                        if model_move_obj: # Only calculate SSD if model made a legal move
+                            board_after_model_move = board.copy()
+                            board_after_model_move.push(model_move_obj)
+                            info_after_model_move = stockfish_engine.analyse(board_after_model_move, chess.engine.Limit(time=args.stockfish_analysis_time))
+                            eval_after_model_move_cp = info_after_model_move.get("score").white().score(mate_score=10000) if info_after_model_move.get("score") else None
 
-                    # Calculate SSD
-                    if sf_best_move_eval_cp is not None:
-                        board_after_model_move = board.copy()
-                        board_after_model_move.push(model_move)
-                        # Re-evaluate position after model's move with Stockfish consistently
-                        info_after_model_move = stockfish_engine.analyse(board_after_model_move, chess.engine.Limit(time=args.stockfish_analysis_time))
-                        eval_after_model_move_cp = info_after_model_move.get("score").white().score(mate_score=10000) if info_after_model_move.get("score") else None
-                        
-                        if eval_after_model_move_cp is not None:
-                            # SSD: (Eval after Stockfish's best move) - (Eval after model's move)
-                            # Positive means model was worse than Stockfish's best.
-                            # All evals are from White's perspective.
-                            # We need the score of the position *if* sf_best_move_uci was played.
-                            # sf_analysis["scores_cp"][0] IS this score.
-                            
-                            ssd = None
-                            if board.turn == chess.WHITE: # If it was White's turn to move
-                                ssd = sf_best_move_eval_cp - eval_after_model_move_cp
-                            else: # If it was Black's turn to move (higher white_pov_score is worse for black)
-                                ssd = eval_after_model_move_cp - sf_best_move_eval_cp # Loss for black means this value is positive
+                            if sf_eval_after_sf_best_cp is not None and eval_after_model_move_cp is not None:
+                                ssd = 0
+                                if board.turn == chess.WHITE: # White made the move
+                                    ssd = sf_eval_after_sf_best_cp - eval_after_model_move_cp
+                                else: # Black made the move
+                                    ssd = eval_after_model_move_cp - sf_eval_after_sf_best_cp 
+                                current_result["ssd_cp"] = ssd
+                                total_ssd_sum += ssd; ssd_count += 1
+                            else: current_result["ssd_cp"] = None
+                        else: current_result["ssd_cp"] = None # Model's move was illegal or invalid
 
-                            current_result["ssd_cp"] = ssd
-                            if ssd is not None: total_ssd_sum += ssd; ssd_count += 1
-                        else: current_result["ssd_cp"] = None
-                    else: current_result["ssd_cp"] = None
+                        # Top-k agreement (even if move was illegal, check if UCI string matches)
+                        for k_val in args.top_k_agreement:
+                            is_in_top_k = predicted_uci in sf_analysis["top_moves_uci"][:k_val]
+                            current_result[f"in_top_{k_val}"] = is_in_top_k
+                            if is_in_top_k: top_k_correct[k_val] += 1
+                    else: current_result["ssd_cp"] = None # SF analysis failed
 
-                    # Top-k agreement
-                    for k_val in args.top_k_agreement:
-                        is_in_top_k = predicted_uci in sf_analysis["top_moves_uci"][:k_val]
-                        current_result[f"in_top_{k_val}"] = is_in_top_k
-                        if is_in_top_k: top_k_correct[k_val] += 1
-                else: # Stockfish failed to give moves
+                except chess.InvalidFenError:
+                    print(f"Warning: Invalid FEN '{fen}' found in input. Skipping Stockfish eval for this item.")
                     current_result["ssd_cp"] = None
+            else: print(f"Warning: Could not parse FEN from input: {input_prompt_str[:100]}..."); current_result["ssd_cp"] = None
 
-            elif "explain" in task_type.lower() and reference_output: # Assuming explanation tasks have "explain"
-                explanation_count += 1
-                bert_score_preds.append(model_generated_output)
-                bert_score_refs.append(reference_output)
-                current_result["bert_score_precision"] = None # Will be filled later if batching BERTScore
-                current_result["bert_score_recall"] = None
-                current_result["bert_score_f1"] = None
-            
-            results_per_sample.append(current_result)
+        elif "explain" in task_type.lower() and reference_output:
+            explanation_count += 1
+            bert_score_preds.append(model_generated_output)
+            bert_score_refs.append(reference_output)
+            # Individual scores will be added after batch BERTScore calculation
+        
+        results_per_sample.append(current_result)
 
     # --- Aggregate and Report Metrics ---
     final_metrics = {}
-    if ssd_count > 0:
-        final_metrics["average_ssd_cp"] = total_ssd_sum / ssd_count
+    if ssd_count > 0: final_metrics["average_ssd_cp"] = round(total_ssd_sum / ssd_count, 2)
+    else: final_metrics["average_ssd_cp"] = None
+    
     if move_prediction_count > 0:
         for k_val in args.top_k_agreement:
-            final_metrics[f"top_{k_val}_agreement_rate"] = top_k_correct[k_val] / move_prediction_count
+            final_metrics[f"top_{k_val}_agreement_rate"] = round(top_k_correct[k_val] / move_prediction_count, 4)
     
     if bert_score_preds and bert_score_refs:
-        print("Calculating BERTScore for explanations...")
-        P, R, F1 = bert_score_calculate(bert_score_preds, bert_score_refs, lang="en", 
-                                        model_type=args.bert_score_model_type, verbose=True, device=DEVICE)
-        final_metrics["bert_score_precision_avg"] = P.mean().item()
-        final_metrics["bert_score_recall_avg"] = R.mean().item()
-        final_metrics["bert_score_f1_avg"] = F1.mean().item()
-        
-        # Add individual BERTScore to results_per_sample
-        bert_idx = 0
-        for res_item in results_per_sample:
-            if "explain" in res_item["task_type"].lower() and res_item["reference_output"]:
-                 if bert_idx < len(P): # Check bounds
-                    res_item["bert_score_precision"] = P[bert_idx].item()
-                    res_item["bert_score_recall"] = R[bert_idx].item()
-                    res_item["bert_score_f1"] = F1[bert_idx].item()
-                    bert_idx +=1
+        print("Calculating BERTScore for explanations (this may take a moment)...")
+        try:
+            P, R, F1 = bert_score_calculate(bert_score_preds, bert_score_refs, lang="en", 
+                                            model_type=args.bert_score_model_type, verbose=False, device=DEVICE, batch_size=args.batch_size*2)
+            final_metrics["bert_score_precision_avg"] = round(P.mean().item(), 4)
+            final_metrics["bert_score_recall_avg"] = round(R.mean().item(), 4)
+            final_metrics["bert_score_f1_avg"] = round(F1.mean().item(), 4)
+            
+            bert_idx = 0
+            for res_item in results_per_sample:
+                if "explain" in res_item["task_type"].lower() and res_item["reference_output"]:
+                     if bert_idx < len(P):
+                        res_item["bert_score_precision"] = round(P[bert_idx].item(), 4)
+                        res_item["bert_score_recall"] = round(R[bert_idx].item(), 4)
+                        res_item["bert_score_f1"] = round(F1[bert_idx].item(), 4)
+                        bert_idx +=1
+        except Exception as e_bs:
+            print(f"Error calculating BERTScore: {e_bs}. BERTScore metrics will be missing.")
+            final_metrics["bert_score_precision_avg"] = None; final_metrics["bert_score_recall_avg"] = None; final_metrics["bert_score_f1_avg"] = None
 
 
     print("\n--- Aggregated Evaluation Metrics ---")
+    if not final_metrics: print("No metrics calculated (Stockfish might have failed or no relevant tasks found).")
     for metric, value in final_metrics.items():
-        print(f"{metric.replace('_', ' ').title()}: {value:.4f}")
-
-    # Fluency: Typically requires human evaluation or more advanced NLP models.
-    # For now, we can mention it as a qualitative aspect or future work.
-    print("\nFluency of explanations: To be assessed qualitatively or with advanced metrics (e.g., perplexity against a general LM).")
+        print(f"{metric.replace('_', ' ').title()}: {value if value is not None else 'N/A'}")
+    print("\nFluency of explanations: To be assessed qualitatively or with more advanced metrics.")
 
     # Save detailed results
     if args.output_results_file:
+        output_dir = os.path.dirname(args.output_results_file)
+        if output_dir and not os.path.exists(output_dir): os.makedirs(output_dir, exist_ok=True)
         print(f"Saving detailed results to: {args.output_results_file}")
         output_to_save = {"aggregated_metrics": final_metrics, "per_sample_results": results_per_sample}
         try:
-            with open(args.output_results_file, "w") as f:
-                json.dump(output_to_save, f, indent=4)
+            with open(args.output_results_file, "w") as f: json.dump(output_to_save, f, indent=4)
             print(f"Results saved to {args.output_results_file}")
-        except Exception as e:
-            print(f"Error saving results to file: {e}")
+        except Exception as e: print(f"Error saving results to file: {e}")
 
     # --- Cleanup ---
-    if stockfish_engine:
-        stockfish_engine.quit()
-        print("Stockfish engine quit.")
-    
-    # Clear model from GPU memory
-    del model
-    del tokenizer
+    if stockfish_engine: stockfish_engine.quit(); print("Stockfish engine quit.")
+    del model; del tokenizer
     if 'stockfish_engine' in locals() and stockfish_engine: del stockfish_engine
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-    print("Evaluation complete. Models cleared from memory.")
+    if torch.cuda.is_available(): torch.cuda.empty_cache(); print("CUDA cache emptied.")
+    print("Evaluation complete.")
 
 
 if __name__ == "__main__":

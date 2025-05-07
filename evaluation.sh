@@ -36,9 +36,9 @@ python evaluation.py \
     --output_results_file ./evaluation_results/tinyllama_phase1_adapter_eval.json \
     --base_model_cache_dir ./hf_cache \
     --stockfish_analysis_time 0.5 \
-    --top_k_agreement 1 3 10 \
+    --top_k_agreement 1 3 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
-    --max_eval_samples 500 \
+    --max_eval_samples 10 \
     --max_seq_length 1024 \
     --batch_size 8 \
     --load_in_4bit \
