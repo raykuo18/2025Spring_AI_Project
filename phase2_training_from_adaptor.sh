@@ -11,8 +11,8 @@ NUM_GPUS=$1
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
-#SBATCH --output=/home/skuo/out_phase1_training_%j.txt
-#SBATCH --error=/home/skuo/err_phase1_training_%j.txt
+#SBATCH --output=/home/skuo/out_phase2_from_adapter_%j.txt
+#SBATCH --error=/home/skuo/err_phase2_from_adapter_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
 #SBATCH --gres=gpu:${NUM_GPUS}
@@ -31,7 +31,7 @@ cd /home/skuo/2025Spring_AI_Project
 # Example for TinyLLaMA
 python phase2_training.py \
     --model_name "TinyLLaMA" \
-    # --phase1_adapter_path # OMIT THIS LINE TO TRAIN FROM SCRATCH (BASE MODEL)
+    --phase1_adapter_path training_output/tinyllama_phase1/TinyLLaMA_06225337/final_lora_adapter \
     --train_folder training_data/phase2/train/ \
     --val_folder training_data/phase2/val/ \
     --test_folder training_data/phase2/test/ \
