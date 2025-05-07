@@ -40,10 +40,10 @@ python phase2_training.py \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
     --num_train_epochs 3 \
-    --per_device_train_batch_size 4  # Adjust based on VRAM for explanation task
+    --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 4 \
-    --gradient_accumulation_steps 4  # Effective batch size: 2*8=16 (adjust as needed)
-    --learning_rate 1e-4             # Might start slightly lower for explanation or same as P1
+    --gradient_accumulation_steps 4 \
+    --learning_rate 1e-4 \
     --weight_decay 0.01 \
     --warmup_ratio 0.03 \
     --lr_scheduler_type "cosine" \
