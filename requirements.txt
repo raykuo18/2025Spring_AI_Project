@@ -55,3 +55,5 @@ stockfish            # Python wrapper for the Stockfish chess engine
 # Consider using a virtual environment (venv, conda) to manage these dependencies.
 # Regularly update packages, but test after updates as breaking changes can occur.
 # You can pin versions (e.g., transformers==4.38.1) once you have a stable setup.
+
+tensorboard
