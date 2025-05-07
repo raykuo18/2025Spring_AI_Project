@@ -4,7 +4,7 @@ python phase1_training.py \
     --train_file training_data/phase1/train.jsonl \
     --val_file training_data/phase1/val.jsonl \
     --test_file training_data/phase1/test.jsonl \
-    --tokenized_data_path /Volumes/Transcend/ai-project \
+    --tokenized_data_path training_data/phase1 \
     --output_dir ./training_output/tinyllama_phase1 \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
