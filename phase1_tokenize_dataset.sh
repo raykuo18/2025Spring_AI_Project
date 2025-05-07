@@ -27,6 +27,10 @@ python phase1_training.py \
     --report_to "tensorboard" \
     --seed 42 \
     --load_in_4bit \
+    --max_train_samples 600000 \
+    --max_eval_samples 200000 \
+    --max_test_samples 200000
+
     # --use_flash_attention_2 # Uncomment if your setup supports it AND you are NOT using --load_in_4bit (usually one or the other)
     # --max_train_samples 10000 # Optional: If you want to train on a subset of your tokenized train data
     # --max_eval_samples 1000   # Optional: If you want to evaluate on a subset of your tokenized val data
