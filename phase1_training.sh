@@ -58,6 +58,6 @@ python phase1_training.py \
     --seed 42 \
     --load_in_4bit \
     --max_train_samples 600000 \
-    --max_eval_samples 200000 \
+    --max_val_samples 200000 \
     --max_test_samples 200000
 EOT
