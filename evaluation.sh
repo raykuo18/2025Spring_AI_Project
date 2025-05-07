@@ -11,8 +11,8 @@ NUM_GPUS=$1
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
-#SBATCH --output=/home/skuo/out_phase1_training_%j.txt
-#SBATCH --error=/home/skuo/err_phase1_training_%j.txt
+#SBATCH --output=/home/skuo/out_evaluation_%j.txt
+#SBATCH --error=/home/skuo/err_evaluation_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
 #SBATCH --gres=gpu:${NUM_GPUS}
@@ -28,7 +28,7 @@ nvidia-smi
 # /home/<netid>/miniconda3/envs/your_conda_env/bin/python /home/<netid>/run.py
 cd /home/skuo/2025Spring_AI_Project
 
-python evaluate_model.py \
+python evaluation.py \
     --model_name "TinyLLaMA" \
     --lora_adapter_path training_output/tinyllama_phase1/TinyLLaMA_07070558/checkpoint-1000 \
     --test_file training_data/phase1/test.jsonl \
