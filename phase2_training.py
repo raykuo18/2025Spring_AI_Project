@@ -9,6 +9,7 @@ import torch
 import sys
 import time
 import glob
+from typing import Optional
 from datasets import load_dataset, DatasetDict, Dataset, concatenate_datasets
 from transformers import (
     AutoModelForCausalLM,
