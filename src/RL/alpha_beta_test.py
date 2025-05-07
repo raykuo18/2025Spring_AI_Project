@@ -175,6 +175,8 @@ def main():
     i.add_argument("--fen", required=True)
     args = argp.parse_args()
 
+    print(f"Using device: {DEVICE}")
+
     if args.cmd == "train":
         env = AlphaBetaEnv(load_start_positions())
         check_env(env, warn=True)
