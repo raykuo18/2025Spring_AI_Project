@@ -7,3 +7,5 @@ api_key/**
 .env
 
 *.gguf
+
+.DS_Store
