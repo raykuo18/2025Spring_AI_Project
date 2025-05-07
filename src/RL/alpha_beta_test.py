@@ -67,7 +67,7 @@ def centipawn_loss(fen: str, tutor_move: str, depth: int = 12) -> float:
 # --------------------------------------------------------------------------- #
 def explanation_quality(prompt: str, explanation: str) -> float:
     """
-    Returns a floating reward in [0, 1].  You should replace this with
+    Returns a floating reward in [0, 1].  Possibly replace this with
     GCC-Eval style LLM grading or human labels.  Here we reward brevity +
     presence of chess terms as a cheap proxy.
     """
