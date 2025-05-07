@@ -9,6 +9,7 @@ import torch
 import sys
 import time # For timestamped run directories
 import glob
+from typing import Optional
 from datasets import load_dataset, DatasetDict, Dataset
 from transformers import (
     AutoModelForCausalLM,
