@@ -24,4 +24,4 @@ api_key/**
 /models
 /hf_cache
 /training_output
-
+/evaluation_results
