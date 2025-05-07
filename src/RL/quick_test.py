@@ -11,9 +11,11 @@ gguf_file = "tinyllama-1.1b-chat-v1.0.Q6_K.gguf"
 
 TARGET_MODULES = ["q_proj", "v_proj"]  # attention weights
 
-LORA_PATH: str = (
-    "/Users/adebayobraimah/Desktop/projects/2025Spring_AI_Project/src/models/final_lora_adapter"
-)
+# LORA_PATH: str = (
+#     "/Users/adebayobraimah/Desktop/projects/2025Spring_AI_Project/src/models/final_lora_adapter"
+# )
+
+LORA_PATH: str = "/home/adbraimah/cse537/2025Spring_AI_Project/src/models/final_lora_adapter"
 
 
 def get_device() -> torch.device:
