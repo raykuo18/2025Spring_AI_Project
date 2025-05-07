@@ -38,7 +38,7 @@ python evaluation.py \
     --stockfish_analysis_time 0.5 \
     --top_k_agreement 1 3 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
-    --max_eval_samples 10 \
+    --max_eval_samples 16 \
     --max_seq_length 1024 \
     --batch_size 8 \
     --load_in_4bit \

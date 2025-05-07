@@ -17,6 +17,7 @@ from typing import List, Dict, Optional, Any, Set
 import sys
 import glob
 import math # For math.isclose
+import re
 
 # --- Model Configuration Mapping ---
 MODEL_CONFIGS = {
