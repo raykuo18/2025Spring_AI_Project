@@ -1,53 +1,6 @@
-#!/usr/bin/env python3
-
-import argparse
-import os
-import json
-import random
-import numpy as np
-import torch
-from datasets import load_dataset, DatasetDict, Dataset # Keep Dataset for type hint
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    TrainingArguments,
-    Trainer,
-    DataCollatorForLanguageModeling,
-    BitsAndBytesConfig
-)
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training, TaskType
-import sys
-import glob 
-
-# --- Model Configuration Mapping ---
-MODEL_CONFIGS = {
-    "TinyLLaMA": {
-        "hf_model_name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-        "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj"],
-        "add_eos_token": True,
-    },
-    "Gemma-2B": {
-        "hf_model_name": "google/gemma-2b",
-        "target_modules": ["q_proj", "v_proj", "k_proj", "o_proj"],
-        "add_eos_token": True,
-    },
-    "Phi-2": {
-        "hf_model_name": "microsoft/phi-2",
-        "target_modules": ["q_proj", "v_proj", "k_proj", "dense"],
-        "add_eos_token": True,
-    }
-}
-
-def set_seed(seed: int):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
-
 def main():
     parser = argparse.ArgumentParser(description="Fine-tune or only tokenize for Causal LM with LoRA.")
-    # ... (All argparse arguments as defined in your previous version, including test_file, max_test_samples) ...
+    # ... (All your argparse arguments as defined before) ...
     parser.add_argument("--model_name", type=str, required=True, choices=MODEL_CONFIGS.keys(), help="Name of the base model.")
     parser.add_argument("--train_file", type=str, required=True, help="Path to training JSONL.")
     parser.add_argument("--val_file", type=str, required=True, help="Path to validation JSONL.")
@@ -57,9 +10,9 @@ def main():
     parser.add_argument("--max_seq_length", type=int, default=1024, help="Max sequence length.")
     parser.add_argument("--tokenized_data_path", type=str, default=None, help="Base path to save/load tokenized datasets.")
     parser.add_argument("--overwrite_tokenized_cache", action="store_true", help="Force re-tokenization.")
-    parser.add_argument("--max_train_samples", type=int, default=None, help="Max number of training samples to load and tokenize.") # Changed help text
-    parser.add_argument("--max_eval_samples", type=int, default=None, help="Max number of validation samples to load and tokenize.") # Changed help text
-    parser.add_argument("--max_test_samples", type=int, default=None, help="Max number of test samples to load and tokenize.") # Changed help text
+    parser.add_argument("--max_train_samples", type=int, default=None, help="Max number of training samples to load and tokenize.")
+    parser.add_argument("--max_eval_samples", type=int, default=None, help="Max number of validation samples to load and tokenize.")
+    parser.add_argument("--max_test_samples", type=int, default=None, help="Max number of test samples to load and tokenize.")
     parser.add_argument("--tokenize_only", action="store_true", help="If set, load data, tokenize, save tokenized data (if path provided), and exit.")
     parser.add_argument("--lora_r", type=int, default=8, help="LoRA rank.")
     parser.add_argument("--lora_alpha", type=int, default=32, help="LoRA alpha.")
@@ -85,7 +38,6 @@ def main():
     args = parser.parse_args()
     set_seed(args.seed)
 
-    # --- 1. Load Tokenizer ---
     model_config_details = MODEL_CONFIGS[args.model_name]
     hf_model_name = model_config_details["hf_model_name"]
     add_eos_token_to_output = model_config_details.get("add_eos_token", True)
@@ -97,50 +49,55 @@ def main():
         tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
-    # --- 2. Dataset Preparation ---
     tokenized_train_dataset: Optional[Dataset] = None
     tokenized_eval_dataset: Optional[Dataset] = None
     tokenized_test_dataset: Optional[Dataset] = None
     
     sanitized_model_name = hf_model_name.split('/')[-1].replace('-', '_')
     
-    # Function to create a cache path name that includes sample limits if they are applied
-    def get_cache_path_for_split(base_path, split_name, max_samples=None):
-        if not base_path: return None
-        # Incorporate max_samples into the cache path to distinguish different subsets
-        subset_suffix = f"_top{max_samples}" if max_samples is not None else ""
-        return os.path.join(base_path, f"{sanitized_model_name}_seq{args.max_seq_length}_{split_name}{subset_suffix}")
+    datasets_to_process_config = {
+        "train": {"file": args.train_file, "max_samples": args.max_train_samples},
+        "validation": {"file": args.val_file, "max_samples": args.max_eval_samples},
+    }
+    if args.test_file:
+        datasets_to_process_config["test"] = {"file": args.test_file, "max_samples": args.max_test_samples}
 
-    train_cache_path = get_cache_path_for_split(args.tokenized_data_path, "train", args.max_train_samples)
-    eval_cache_path = get_cache_path_for_split(args.tokenized_data_path, "validation", args.max_eval_samples)
-    test_cache_path = get_cache_path_for_split(args.tokenized_data_path, "test", args.max_test_samples) if args.test_file else None
+    tokenized_datasets_loaded = {}
 
-    # Attempt to load from cache first
-    if not args.overwrite_tokenized_cache:
-        if train_cache_path and os.path.exists(os.path.join(train_cache_path, "dataset_info.json")):
-            print(f"Loading tokenized training data from cache: {train_cache_path}")
-            try: tokenized_train_dataset = Dataset.load_from_disk(train_cache_path)
-            except Exception as e: print(f"Failed to load train cache: {e}. Will re-tokenize.")
+    for split_name, config in datasets_to_process_config.items():
+        raw_file_path = config["file"]
+        max_samples_for_split = config["max_samples"]
+        cache_path_for_split = None
+
+        if args.tokenized_data_path:
+            # Incorporate max_samples into the cache path name for uniqueness
+            subset_suffix = f"_top{max_samples_for_split}" if max_samples_for_split is not None else ""
+            cache_dir_for_split = os.path.join(args.tokenized_data_path, f"{sanitized_model_name}_seq{args.max_seq_length}_{split_name}{subset_suffix}")
+            cache_path_for_split = cache_dir_for_split
+            
+            if not args.overwrite_tokenized_cache and os.path.exists(os.path.join(cache_path_for_split, "dataset_info.json")):
+                print(f"Loading tokenized {split_name} data from cache: {cache_path_for_split}")
+                try:
+                    tokenized_datasets_loaded[split_name] = Dataset.load_from_disk(cache_path_for_split)
+                    continue # Skip to next split if loaded from cache
+                except Exception as e:
+                    print(f"Failed to load {split_name} cache: {e}. Will re-tokenize.")
         
-        if eval_cache_path and os.path.exists(os.path.join(eval_cache_path, "dataset_info.json")):
-            print(f"Loading tokenized validation data from cache: {eval_cache_path}")
-            try: tokenized_eval_dataset = Dataset.load_from_disk(eval_cache_path)
-            except Exception as e: print(f"Failed to load eval cache: {e}. Will re-tokenize.")
-
-        if test_cache_path and args.test_file and os.path.exists(os.path.join(test_cache_path, "dataset_info.json")):
-            print(f"Loading tokenized test data from cache: {test_cache_path}")
-            try: tokenized_test_dataset = Dataset.load_from_disk(test_cache_path)
-            except Exception as e: print(f"Failed to load test cache: {e}. Will re-tokenize.")
-
-    # --- Tokenize if not loaded from cache ---
-    datasets_to_tokenize = {}
-    if tokenized_train_dataset is None and args.train_file: datasets_to_tokenize["train"] = (args.train_file, args.max_train_samples, train_cache_path)
-    if tokenized_eval_dataset is None and args.val_file: datasets_to_tokenize["validation"] = (args.val_file, args.max_eval_samples, eval_cache_path)
-    if tokenized_test_dataset is None and args.test_file: datasets_to_tokenize["test"] = (args.test_file, args.max_test_samples, test_cache_path)
-
-    if datasets_to_tokenize:
-        print("Some datasets need tokenization...")
+        # If not loaded from cache, tokenize
+        print(f"Tokenizing {split_name} data from {raw_file_path}...")
         
+        current_data_file_dict_for_load = {split_name: raw_file_path}
+        slicing_instruction = None
+        if max_samples_for_split is not None and max_samples_for_split > 0:
+            slicing_instruction = f"{split_name}[:{max_samples_for_split}]"
+            print(f"Will load a maximum of {max_samples_for_split} samples for {split_name} set using split='{slicing_instruction}'.")
+        
+        if slicing_instruction:
+            raw_dataset_this_split = load_dataset("json", data_files=current_data_file_dict_for_load, split=slicing_instruction)
+        else:
+            raw_dataset_dict = load_dataset("json", data_files=current_data_file_dict_for_load)
+            raw_dataset_this_split = raw_dataset_dict[split_name]
+
         def preprocess_function(examples):
             inputs_text = [] 
             prompts_text = examples["input"]
@@ -159,52 +116,38 @@ def main():
             return model_inputs
 
         num_proc = max(1, os.cpu_count() // 2 if os.cpu_count() else 1)
+        print(f"Tokenizing {split_name} set ({len(raw_dataset_this_split)} samples) with {num_proc} processes...")
+        tokenized_split = raw_dataset_this_split.map(
+            preprocess_function, batched=True, remove_columns=raw_dataset_this_split.column_names,
+            num_proc=num_proc, desc=f"Tokenizing {split_name} set"
+        )
+        tokenized_datasets_loaded[split_name] = tokenized_split
 
-        for split_name, (raw_file_path, max_samples_for_split, cache_path_for_split) in datasets_to_tokenize.items():
-            print(f"Loading raw {split_name} data from {raw_file_path}...")
-            # Construct the split string for load_dataset to load only max_samples if specified
-            split_arg = "train" # Default for json loader which expects 'train' key
-            if max_samples_for_split is not None and max_samples_for_split > 0:
-                split_arg = f"train[:{max_samples_for_split}]"
-                print(f"Will load and tokenize a maximum of {max_samples_for_split} samples for {split_name} set.")
-            
-            raw_dataset_split = load_dataset("json", data_files={split_name: raw_file_path}, split=split_arg)[split_name] # Load and potentially slice
+        if cache_path_for_split:
+            print(f"Saving tokenized {split_name} data to cache: {cache_path_for_split}")
+            os.makedirs(cache_path_for_split, exist_ok=True)
+            tokenized_split.save_to_disk(cache_path_for_split)
 
-            print(f"Tokenizing {split_name} set ({len(raw_dataset_split)} samples)...")
-            tokenized_split = raw_dataset_split.map(
-                preprocess_function, batched=True, remove_columns=raw_dataset_split.column_names,
-                num_proc=num_proc, desc=f"Tokenizing {split_name} set"
-            )
-            
-            if split_name == "train": tokenized_train_dataset = tokenized_split
-            elif split_name == "validation": tokenized_eval_dataset = tokenized_split
-            elif split_name == "test": tokenized_test_dataset = tokenized_split
+    tokenized_train_dataset = tokenized_datasets_loaded.get("train")
+    tokenized_eval_dataset = tokenized_datasets_loaded.get("validation")
+    tokenized_test_dataset = tokenized_datasets_loaded.get("test")
 
-            if cache_path_for_split: # Save if path was provided
-                print(f"Saving tokenized {split_name} data to cache: {cache_path_for_split}")
-                os.makedirs(cache_path_for_split, exist_ok=True)
-                tokenized_split.save_to_disk(cache_path_for_split)
-
-    # Final check for datasets (should be loaded or tokenized by now)
     if not tokenized_train_dataset or not tokenized_eval_dataset:
-        print("Error: Training or Validation dataset could not be prepared. Exiting.")
+        print("Error: Training or Validation dataset is empty or failed to load/process. Exiting.")
         sys.exit(1)
     if args.test_file and not tokenized_test_dataset:
         print("Warning: Test file specified but test dataset could not be prepared.")
-
 
     print(f"Final train dataset size: {len(tokenized_train_dataset)}")
     print(f"Final validation dataset size: {len(tokenized_eval_dataset)}")
     if tokenized_test_dataset: print(f"Final test dataset size: {len(tokenized_test_dataset)}")
 
-
     if args.tokenize_only:
-        if args.tokenized_data_path: print(f"Tokenization complete. Datasets saved in: {args.tokenized_data_path}")
+        if args.tokenized_data_path: print(f"Tokenization complete. Datasets saved in subdirs of: {args.tokenized_data_path}")
         else: print("Tokenization complete. No --tokenized_data_path, data not persistently saved by script.")
         sys.exit(0)
 
-    # --- If not tokenize_only, proceed to load full model and train ---
-    # ... (Model loading, LoRA setup, TrainingArguments, Trainer, train, save adapter, test eval as before) ...
+    # --- Model loading, LoRA setup, TrainingArguments, Trainer, train, save, test eval (as before) ---
     if not args.output_dir: parser.error("--output_dir required if not --tokenize_only.")
     target_modules = model_config_details["target_modules"]
     quantization_config = None
