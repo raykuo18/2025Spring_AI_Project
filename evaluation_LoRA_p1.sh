@@ -38,8 +38,8 @@ python evaluation.py \
     --output_numerical_summary ./evaluation_results/phase1_checkpoint-7800/summary.txt \
     --inference_cache_folder ./evaluation_results/inference_cache \
     --base_model_cache_dir ./hf_cache \
-    --max_p1_eval_samples 100 \
-    --max_p2_eval_samples 100 \
+    --max_p1_eval_samples 10000 \
+    --max_p2_eval_samples 1000 \
     --eval_move_pred \
     --eval_rule_tasks \
     --eval_explanation \
