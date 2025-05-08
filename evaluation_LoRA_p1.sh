@@ -30,7 +30,7 @@ cd /home/skuo/2025Spring_AI_Project
 
 python evaluation.py \
     --model_name "TinyLLaMA" \
-    --lora_adapter_path training_output/tinyllama_phase1/TinyLLaMA_07070558/checkpoint-1000 \
+    --lora_adapter_path checkpoints/phase1_checkpoint-7200 \
     --test_file training_data/phase1/test.jsonl \
     --stockfish_path ../stockfish/stockfish-ubuntu-x86-64 \
     --output_results_file ./evaluation_results/tinyllama_phase1_LoRA_p2_eval.json \
