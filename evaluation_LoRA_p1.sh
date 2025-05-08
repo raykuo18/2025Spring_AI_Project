@@ -47,7 +47,7 @@ python evaluation.py \
     --top_k_agreement 1 3 5 10 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
     --max_seq_length 1024 \
-    --batch_size 8 \
+    --batch_size 64 \
     --seed 42 \
     --default_max_new_tokens 150 \
     --load_in_4bit

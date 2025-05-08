@@ -64,60 +64,72 @@ def get_stockfish_analysis(board: chess.Board, engine: chess.engine.SimpleEngine
         return results
     except (chess.engine.EngineTerminatedError, chess.engine.EngineError, Exception): return results
 
-def post_process_model_output(raw_text: str, task_type: str, 
-                              reference_output: Optional[str]=None) -> str:
-    # Removed teacher_task_instruction as it's not available during eval typically
-    # Rely on task_type and general cleanup rules.
+def post_process_model_output(raw_text: str, task_type: str,
+                              teacher_task_instruction: Optional[str]=None, # Added, default None
+                              reference_output: Optional[str]=None, # Added, default None
+                              is_explanation_task: bool = False) -> str: # Added, default False
+    """Cleans the generated output based on the task type."""
     processed_text = raw_text.strip()
+
+    # 1. Generic Boilerplate Removal (case-insensitive)
     common_boilerplate_patterns = [
         r"^\s*explanation:\s*\[assistant\]\s*", r"^\s*explanation:\s*", r"^\s*\[assistant\]\s*",
         r"^\s*okay, here's an explanation:\s*", r"^\s*sure, i can explain that\s*[:.]?\s*",
         r"^\s*here is the explanation:\s*", r"^\s*here's a concise explanation:\s*",
         r"^\s*the explanation is as follows:\s*"
     ]
-    for bp_pattern in common_boilerplate_patterns: processed_text = re.sub(bp_pattern, "", processed_text, flags=re.IGNORECASE | re.DOTALL).strip()
-    
-    prompt_guidance_echoes = [ # Remove prompt fragments seen in examples
-        r"^\s*\(e\.g\., central control.*opening ideas\)\.\s*",
-        r"^\s*opening ideas\)\.\s*", 
-        r"^\s*piece activation, opening ideas\)\.\s*",
-        r"^\s*\d+ resulted in '[^']+'. Explain concisely.*position\.\s*",
+    for bp_pattern in common_boilerplate_patterns:
+        processed_text = re.sub(bp_pattern, "", processed_text, flags=re.IGNORECASE | re.DOTALL).strip()
+
+    # 2. Remove echoed task instructions (heuristic)
+    prompt_guidance_echoes = [
+        r"\(e\.g\., central control.*opening ideas\)\.", # From P2.1 example prompt
+        r"opening ideas\)\.",
+        r"piece activation, opening ideas\)\.",
+        r"\d+ resulted in '[^']+'. Explain concisely.+position\.", # From P2.3 example prompt
     ]
+    # In evaluation, teacher_task_instruction is usually None, so we rely on general patterns.
     for echo_pattern in prompt_guidance_echoes:
-        match = re.match(echo_pattern, processed_text, re.IGNORECASE | re.DOTALL)
-        if match: processed_text = processed_text[match.end():].strip(); processed_text = re.sub(r"^\s*\[assistant\]\s*", "", processed_text, flags=re.IGNORECASE).strip()
-            
-    # Task-specific extraction
-    if task_type == "predict_move":
-        uci_match = re.match(r"^\s*([a-h][1-8][a-h][1-8][qrnb]?)", processed_text); return uci_match.group(1) if uci_match else processed_text.split(" ")[0] if processed_text else ""
-    elif task_type == "identify_piece":
+        match = re.match(rf"^\s*{echo_pattern}\s*", processed_text, re.IGNORECASE | re.DOTALL)
+        if match:
+            processed_text = processed_text[match.end():].strip()
+            processed_text = re.sub(r"^\s*\[assistant\]\s*", "", processed_text, flags=re.IGNORECASE).strip()
+
+    # 3. Task-specific extraction (use lowercase task_type for matching)
+    task_type_lower = task_type.lower()
+    if task_type_lower == "predict_move":
+        uci_match = re.match(r"^\s*([a-h][1-8][a-h][1-8][qrnb]?)", processed_text)
+        return uci_match.group(1) if uci_match else processed_text.split(" ")[0] if processed_text else ""
+    elif task_type_lower == "identify_piece":
         piece_match = re.search(r"\b([pnbrqkPNBRQK])\b", processed_text)
         if not piece_match and processed_text and processed_text[0] in "pnbrqkPNBRQK": piece_match = re.match(r"([pnbrqkPNBRQK])", processed_text)
         return piece_match.group(1) if piece_match else processed_text.split(" ")[0] if processed_text else ""
-    elif task_type == "identify_color":
+    elif task_type_lower == "identify_color":
         if re.search(r"\bwhite\b", processed_text, re.IGNORECASE): return "White"
         if re.search(r"\bblack\b", processed_text, re.IGNORECASE): return "Black"
         return processed_text.split(" ")[0] if processed_text else "Unknown"
-    elif task_type in ["is_square_attacked", "can_piece_move", "parse_comment_mate_unavoidable"]: # Yes/No answers
+    elif task_type_lower in ["is_square_attacked", "can_piece_move", "parse_comment_mate_unavoidable"]: # Yes/No answers
         if re.search(r"\byes\b", processed_text, re.IGNORECASE): return "Yes"
         if re.search(r"\bno\b", processed_text, re.IGNORECASE): return "No"
         return processed_text.split(" ")[0] if processed_text else "Unknown"
-    elif task_type == "list_legal_moves":
-        potential_ucis = re.findall(r"[a-h][1-8][a-h][1-8][qrnb]?", processed_text); return " ".join(sorted(list(set(potential_ucis))))
-    elif task_type == "extract_comment_best_move": # Expect SAN
+    elif task_type_lower == "list_legal_moves":
+        potential_ucis = re.findall(r"[a-h][1-8][a-h][1-8][qrnb]?", processed_text)
+        return " ".join(sorted(list(set(potential_ucis))))
+    elif task_type_lower == "extract_comment_best_move": # Expect SAN
         san_match = re.match(r"^\s*([PNBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[PNBRQK])?|O-O(?:-O)?)\b", processed_text)
         return san_match.group(1) if san_match else processed_text.split(" ")[0] if processed_text else ""
-    
-    # Fallback / General cleaning for explanations
-    # Truncate sentences only if explicitly identified as an explanation type
-    is_explanation_task_flag = "explain" in task_type.lower() or task_type.startswith("p2")
-    if is_explanation_task_flag:
-        sentences = re.split(r'(?<=[.!?])\s+', processed_text); max_sentences = 4 
+
+    # 4. Fallback / General cleaning for explanations
+    if is_explanation_task: # Check the flag passed from main loop
+        sentences = re.split(r'(?<=[.!?])\s+', processed_text)
+        max_sentences = 4
         if sentences and sentences[0]: processed_text = " ".join(sentences[:max_sentences])
-        else: processed_text = "" if not raw_text.strip() else raw_text.strip() 
+        else: processed_text = "" # If empty after splitting, return empty
         if processed_text and processed_text[-1] not in ".!?": processed_text += "."
-    
-    processed_text = re.sub(r'\s\s+', ' ', processed_text).strip(); processed_text = processed_text.replace("\n", " ").strip()
+
+    # Final cleanup
+    processed_text = re.sub(r'\s\s+', ' ', processed_text).strip()
+    processed_text = processed_text.replace("\n", " ").strip()
     if processed_text.lower().startswith("[assistant]"): processed_text = processed_text[len("[assistant]"):].strip()
     return processed_text
 
