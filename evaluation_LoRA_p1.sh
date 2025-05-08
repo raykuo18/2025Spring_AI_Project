@@ -30,12 +30,12 @@ cd /home/skuo/2025Spring_AI_Project
 
 python evaluation.py \
     --model_name "TinyLLaMA" \
-    --lora_adapter_path checkpoints/phase1_checkpoint-7200 \
+    --lora_adapter_path checkpoints/training_output/tinyllama_phase1_continued/TinyLLaMA_20250507_07071025/staged_checkpoints/checkpoint-7800 \
     --test_file training_data/phase1/test.jsonl \
-    --explanation_test_folder training_data/phase2/test \
-    --stockfish_path src/stockfish/stockfish-macos-m1-apple-silicon \
-    --output_results_file ./evaluation_results/phase1_checkpoint-7200/result.json \
-    --output_numerical_summary ./evaluation_results/phase1_checkpoint-7200/summary.txt \
+    --explanation_test_folder training_data/phase2_corrected/test \
+    --stockfish_path ../stockfish-11-linux/Linux/stockfish_20011801_x64 \
+    --output_results_file ./evaluation_results/phase1_checkpoint-7800/result.json \
+    --output_numerical_summary ./evaluation_results/phase1_checkpoint-7800/summary.txt \
     --base_model_cache_dir ./hf_cache \
     --max_p1_eval_samples 100 \
     --max_p2_eval_samples 100 \
