@@ -39,7 +39,7 @@ python phase2_training.py \
     --output_dir ./training_output/tinyllama_phase2_from_LoRA \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
-    --num_train_epochs 3 \
+    --num_train_epochs 10 \
     --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 4 \
