@@ -11,8 +11,8 @@ NUM_GPUS=$1
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
-#SBATCH --output=/home/skuo/out_LoRA_p2_%j.txt
-#SBATCH --error=/home/skuo/err_LoRA_p2_%j.txt
+#SBATCH --output=/home/skuo/out_evaluation_LoRA_p2_%j.txt
+#SBATCH --error=/home/skuo/err_evaluation_LoRA_p2_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
 #SBATCH --gres=gpu:${NUM_GPUS}

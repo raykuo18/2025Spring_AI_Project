@@ -31,12 +31,12 @@ cd /home/skuo/2025Spring_AI_Project
 # Example for TinyLLaMA
 python phase2_training.py \
     --model_name "TinyLLaMA" \
-    --phase1_adapter_path training_output/tinyllama_phase1_continued/TinyLLaMA_20250507_07071025/staged_checkpoints/checkpoint-7200 \
+    --phase1_adapter_path training_output/tinyllama_phase1_continued/TinyLLaMA_20250507_07071025/staged_checkpoints/checkpoint-10000 \
     --train_folder training_data/phase2_corrected/train/ \
     --val_folder training_data/phase2_corrected/val/ \
     --test_folder training_data/phase2_corrected/test/ \
     --tokenized_data_path training_data/phase2/ \
-    --output_dir ./training_output/tinyllama_phase2_from_LoRA \
+    --output_dir ./training_output/tinyllama_phase2_from_LoRA_checkpoint-10000 \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
     --num_train_epochs 10 \
@@ -54,7 +54,7 @@ python phase2_training.py \
     --logging_steps 10 \
     --save_steps 100 \
     --eval_steps 50 \
-    --save_total_limit 10 \
+    --save_total_limit 5 \
     --report_to "tensorboard" \
     --seed 42 \
     --load_in_4bit \
