@@ -44,7 +44,7 @@ python evaluation.py \
     --eval_rule_tasks \
     --eval_explanation \
     --stockfish_analysis_time 0.3 \
-    --top_k_agreement 1 3 5 10 \
+    --top_k_agreement 1 3 5 10 50 100 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
     --max_seq_length 1024 \
     --batch_size 64 \
