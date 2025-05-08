@@ -1,7 +1,7 @@
 import chess.engine
 
 # Replace this with the path to your Stockfish binary
-stockfish_path = "../stockfish/stockfish-ubuntu-x86-64-sse41-popcnt"
+stockfish_path = "../stockfish-11-linux/Linux/stockfish_20011801_x64"
 
 def test_stockfish(stockfish_path):
     try:

@@ -32,15 +32,22 @@ python evaluation.py \
     --model_name "TinyLLaMA" \
     --lora_adapter_path checkpoints/phase1_checkpoint-7200 \
     --test_file training_data/phase1/test.jsonl \
-    --stockfish_path ../stockfish/stockfish-ubuntu-x86-64 \
-    --output_results_file ./evaluation_results/tinyllama_phase1_LoRA_p2_eval.json \
+    --explanation_test_folder training_data/phase2/test \
+    --stockfish_path src/stockfish/stockfish-macos-m1-apple-silicon \
+    --output_results_file ./evaluation_results/phase1_checkpoint-7200/result.json \
+    --output_numerical_summary ./evaluation_results/phase1_checkpoint-7200/summary.txt \
     --base_model_cache_dir ./hf_cache \
-    --stockfish_analysis_time 0.5 \
-    --top_k_agreement 1 3 \
+    --max_p1_eval_samples 100 \
+    --max_p2_eval_samples 100 \
+    --eval_move_pred \
+    --eval_rule_tasks \
+    --eval_explanation \
+    --stockfish_analysis_time 0.3 \
+    --top_k_agreement 1 3 5 10 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
-    --max_eval_samples 100 \
     --max_seq_length 1024 \
     --batch_size 8 \
-    --load_in_4bit \
-    --seed 42
+    --seed 42 \
+    --default_max_new_tokens 150 \
+    --load_in_4bit
 EOT

@@ -18,5 +18,5 @@ python evaluation.py \
     --max_seq_length 1024 \
     --batch_size 8 \
     --seed 42 \
-    --default_max_new_tokens 150
-    # --load_in_4bit
+    --default_max_new_tokens 150 \
+    --load_in_4bit
