@@ -25,3 +25,4 @@ api_key/**
 /hf_cache
 /training_output
 /evaluation_results
+/checkpoints_for_training

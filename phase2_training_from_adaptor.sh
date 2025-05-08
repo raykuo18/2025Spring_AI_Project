@@ -31,12 +31,12 @@ cd /home/skuo/2025Spring_AI_Project
 # Example for TinyLLaMA
 python phase2_training.py \
     --model_name "TinyLLaMA" \
-    --phase1_adapter_path training_output/tinyllama_phase1/TinyLLaMA_06225337/final_lora_adapter \
+    --phase1_adapter_path training_output/tinyllama_phase1_continued/TinyLLaMA_20250507_07071025/staged_checkpoints/checkpoint-7200 \
     --train_folder training_data/phase2_corrected/train/ \
     --val_folder training_data/phase2_corrected/val/ \
     --test_folder training_data/phase2_corrected/test/ \
     --tokenized_data_path training_data/phase2/ \
-    --output_dir ./training_output/tinyllama_phase2_explainer_scratch \
+    --output_dir ./training_output/tinyllama_phase2_from_LoRA \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
     --num_train_epochs 3 \
@@ -59,8 +59,8 @@ python phase2_training.py \
     --seed 42 \
     --load_in_4bit \
     --max_train_samples 4000 \
-    --max_val_samples 100 \
-    --max_test_samples 100 \
+    --max_val_samples 200 \
+    --max_test_samples 200 \
     --gradient_checkpointing 
     # --gradient_checkpointing_use_reentrant False # This is already the default in the script's argparse
     # --vram_log_multiplier 1 # Optional: To control VRAM logging frequency relative to logging_steps. Default is 1.
