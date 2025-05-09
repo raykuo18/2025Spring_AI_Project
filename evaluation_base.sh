@@ -11,8 +11,8 @@ NUM_GPUS=$1
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
-#SBATCH --output=/home/skuo/out_base_p1_%j.txt
-#SBATCH --error=/home/skuo/err_base_p1_%j.txt
+#SBATCH --output=/home/skuo/out_evaluation_base_%j.txt
+#SBATCH --error=/home/skuo/err_evaluation_base_%j.txt
 #SBATCH --time=2-00:00
 #SBATCH --mem=70000
 #SBATCH --gres=gpu:${NUM_GPUS}
@@ -31,15 +31,23 @@ cd /home/skuo/2025Spring_AI_Project
 python evaluation.py \
     --model_name "TinyLLaMA" \
     --test_file training_data/phase1/test.jsonl \
-    --stockfish_path ../stockfish/stockfish-ubuntu-x86-64 \
-    --output_results_file ./evaluation_results/tinyllama_base_p1_eval.json \
+    --explanation_test_folder training_data/phase2_corrected/test \
+    --stockfish_path ../stockfish-11-linux/Linux/stockfish_20011801_x64 \
+    --output_results_file ./evaluation_results/base/result.json \
+    --output_numerical_summary ./evaluation_results/base/summary.txt \
+    --inference_cache_folder ./evaluation_results/inference_cache \
     --base_model_cache_dir ./hf_cache \
-    --stockfish_analysis_time 0.5 \
-    --top_k_agreement 1 3 \
+    --max_p1_eval_samples 10000 \
+    --max_p2_eval_samples 1000 \
+    --eval_move_pred \
+    --eval_rule_tasks \
+    --eval_explanation \
+    --stockfish_analysis_time 0.3 \
+    --top_k_agreement 1 3 5 10 50 100 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
-    --max_eval_samples 100 \
     --max_seq_length 1024 \
-    --batch_size 8 \
-    --load_in_4bit \
-    --seed 42
+    --batch_size 64 \
+    --seed 42 \
+    --default_max_new_tokens 150 \
+    --load_in_4bit
 EOT
