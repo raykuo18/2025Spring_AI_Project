@@ -118,7 +118,7 @@ def post_process_model_output(raw_text: str, task_type: str,
         if re.search(r"\bwhite\b", processed_text, re.IGNORECASE): return "White"
         if re.search(r"\bblack\b", processed_text, re.IGNORECASE): return "Black"
         return processed_text.split(" ")[0] if processed_text else "Unknown"
-    elif task_type_lower in ["is_square_attacked", "can_piece_move", "parse_comment_mate_unavoidable"]: # Yes/No answers
+    elif task_type_lower in ["is_square_attacked", "can_piece_move", "parse_comment_mate_unavoidable"]:
         if re.search(r"\byes\b", processed_text, re.IGNORECASE): return "Yes"
         if re.search(r"\bno\b", processed_text, re.IGNORECASE): return "No"
         return processed_text.split(" ")[0] if processed_text else "Unknown"
@@ -141,13 +141,12 @@ def post_process_model_output(raw_text: str, task_type: str,
     return processed_text
 
 def parse_task_subtype_from_id(task_id: str) -> str:
-    if not task_id: return "unknown_subtype" # Return a specific string for unknown
+    if not task_id: return "unknown_subtype"
     parts = task_id.split('_')
     if len(parts) >= 4 and (parts[3].lower() == "p2" or parts[3].lower().startswith("p2.")):
-        # e.g., P2.1_General, P2.3_Event_Capture -> P2.1_General, P2.3_Event_Capture
         return "_".join(parts[3:])
-    elif len(parts) >= 4: # For Phase 1 tasks if ID follows similar pattern
-         return parts[3] # e.g. predict_move
+    elif len(parts) >= 4:
+         return parts[3]
     return "unknown_subtype"
 
 
@@ -204,7 +203,7 @@ def main():
     if model.config.pad_token_id is None: model.config.pad_token_id = tokenizer.pad_token_id
     model.eval(); print("Base model loaded.")
 
-    p1_loaded_successfully = False # Same adapter loading logic as before
+    p1_loaded_successfully = False
     if args.phase1_lora_path:
         print(f"Loading phase 1 LoRA adapter from: {args.phase1_lora_path}...")
         if not os.path.isdir(args.phase1_lora_path): print(f"Error: LoRA path '{args.phase1_lora_path}' not found."); sys.exit(1)
@@ -237,14 +236,13 @@ def main():
     elif p2_loaded_successfully and not p1_loaded_successfully: model.set_adapter(args.phase2_adapter_name); print(f"Set active adapter to Phase 2: {args.phase2_adapter_name}")
     elif not p1_loaded_successfully and not p2_loaded_successfully: print("No LoRA adapters loaded. Using base model.")
 
-
-    stockfish_engine = None # Same Stockfish init
+    stockfish_engine = None
     if args.eval_move_pred and args.stockfish_path:
         try: stockfish_engine = chess.engine.SimpleEngine.popen_uci(args.stockfish_path); print(f"Stockfish initialized: {args.stockfish_path}")
         except Exception as e: print(f"Error initializing Stockfish: {e}. Move metrics skipped.")
     elif args.eval_move_pred: print("Stockfish path not provided. Move metrics skipped.")
 
-    all_data_items_to_process = [] # Same data loading
+    all_data_items_to_process = []
     if args.test_file:
         try:
             p1_dataset = load_dataset("json", data_files=args.test_file, split="train")
@@ -253,6 +251,7 @@ def main():
             for item in p1_dataset: item['data_source'] = 'P1'; all_data_items_to_process.append(item)
             print(f"Loaded {len(p1_dataset)} samples from Phase 1 test file.")
         except Exception as e: print(f"Error loading P1 test file {args.test_file}: {e}")
+
     if args.explanation_test_folder:
         explanation_test_files = glob.glob(os.path.join(args.explanation_test_folder, "*.jsonl"))
         if explanation_test_files:
@@ -264,19 +263,17 @@ def main():
                 print(f"Loaded {len(p2_dataset_full)} samples from Phase 2 explanation folder.")
             except Exception as e: print(f"Error loading P2 data: {e}")
         else: print(f"Warning: No *.jsonl files found in {args.explanation_test_folder}")
+
     if not all_data_items_to_process: print("No samples loaded. Exiting."); sys.exit(0)
     random.shuffle(all_data_items_to_process); print(f"Total samples for evaluation: {len(all_data_items_to_process)}")
 
-    # --- Metric Collection Setup ---
     results_per_sample = []; total_ssd_sum = 0.0; ssd_count = 0; top_k_correct = {k: 0 for k in args.top_k_agreement}; move_prediction_count = 0
-    # MODIFIED: explanation_data_for_metrics will store preds/refs grouped by subtype for per-subtype BERTScore.
-    explanation_data_for_metrics_by_subtype = defaultdict(lambda: {"preds": [], "refs": []})
+    explanation_data_by_subtype = defaultdict(lambda: {"preds": [], "refs": []}) # For per-subtype explanation metrics
     accuracy_tasks_counts = defaultdict(lambda: {"correct": 0, "total": 0}); list_legal_metrics_agg = {"f1": 0.0, "prec": 0.0, "rec": 0.0, "count": 0}
 
-    prompts_for_inference = [item['input'] for item in all_data_items_to_process if 'input' in item] # Same inference caching and execution
+    prompts_for_inference = [item['input'] for item in all_data_items_to_process if 'input' in item]
     data_items_for_processing = [item for item in all_data_items_to_process if 'input' in item]
     generated_outputs_text = [None] * len(prompts_for_inference)
-    # ... (Inference Caching and Run Inference logic remains the same as your script) ...
     if args.inference_cache_folder:
         print("Checking inference cache...")
         prompts_needing_inference = []; indices_needing_inference = []; cache_hits = 0
@@ -317,22 +314,17 @@ def main():
                         with open(cache_file_path, "w", encoding="utf-8") as f_cache: f_cache.write(decoded_output)
                     except Exception as e_cache_write: print(f"Warn: Error writing cache file {cache_file_path}: {e_cache_write}")
 
-
-    # --- Metrics Calculation Loop ---
     for idx, item in enumerate(tqdm(data_items_for_processing, desc="Calculating Metrics", ncols=100)):
         task_id = item.get("task_id", f"sample_{idx}"); input_prompt_str = item["input"]
         model_raw_output = generated_outputs_text[idx] if idx < len(generated_outputs_text) and generated_outputs_text[idx] is not None else "GENERATION_ERROR"
         reference_output = item.get("output"); data_source = item.get("data_source", "Unknown")
         task_type = item.get("task", "unknown").lower()
-
         is_explanation_task_flag = (data_source == 'P2')
         effective_task_type = parse_task_subtype_from_id(task_id) if is_explanation_task_flag and task_type == "unknown" else task_type
-        if is_explanation_task_flag and effective_task_type == "unknown_subtype": effective_task_type = "explanation_generic" # Fallback if parse_task_subtype fails
-
+        if is_explanation_task_flag and effective_task_type == "unknown_subtype": effective_task_type = "explanation_generic"
         model_processed_output = post_process_model_output(model_raw_output, effective_task_type, None, reference_output, is_explanation_task_flag)
         current_result = {"task_id": task_id, "task_type": effective_task_type, "data_source": data_source, "input_prompt": input_prompt_str, "model_raw_output": model_raw_output, "model_processed_output": model_processed_output, "reference_output": reference_output, "is_correct": None, "list_f1": None, "list_precision": None, "list_recall": None}
 
-        # Stockfish Metrics
         if args.eval_move_pred and stockfish_engine and effective_task_type == "predict_move" and data_source == 'P1':
             move_prediction_count += 1; fen_match = re.search(r"\[FEN\]\s*(.*?)\s*\[SEP\]", input_prompt_str)
             if fen_match:
@@ -342,68 +334,53 @@ def main():
                     try: model_move_obj = board.parse_uci(predicted_uci)
                     except ValueError: pass
                     if model_move_obj and model_move_obj not in board.legal_moves: model_move_obj = None
-                    
                     sf_analysis = get_stockfish_analysis(board, stockfish_engine, time_limit=args.stockfish_analysis_time, multipv=max(args.top_k_agreement))
                     if sf_analysis["top_moves_uci"]:
                         sf_best_move_uci = sf_analysis["top_moves_uci"][0]; sf_eval_after_sf_best_cp = sf_analysis["scores_cp_after_move"][0] if sf_analysis["scores_cp_after_move"] and len(sf_analysis["scores_cp_after_move"]) > 0 else None
                         current_result["stockfish_top1_uci"] = sf_best_move_uci; current_result["stockfish_top1_eval_cp"] = sf_eval_after_sf_best_cp
-                        if model_move_obj: # Only if model's move is valid and legal
+                        if model_move_obj:
                             board_after_model_move = board.copy(); board_after_model_move.push(model_move_obj)
                             info_after_model_move = stockfish_engine.analyse(board_after_model_move, chess.engine.Limit(time=args.stockfish_analysis_time))
                             eval_after_model_move_cp = info_after_model_move.get("score").white().score(mate_score=10000) if info_after_model_move.get("score") else None
                             if sf_eval_after_sf_best_cp is not None and eval_after_model_move_cp is not None:
                                 ssd = (sf_eval_after_sf_best_cp - eval_after_model_move_cp) if board.turn == chess.WHITE else (eval_after_model_move_cp - sf_eval_after_sf_best_cp)
                                 current_result["ssd_cp"] = ssd; total_ssd_sum += ssd; ssd_count += 1
-                        # Top-K agreement is calculated based on the raw predicted UCI, even if it was illegal for SSD.
                         for k_val in args.top_k_agreement:
                             is_in_top_k = predicted_uci in sf_analysis["top_moves_uci"][:k_val]; current_result[f"in_top_{k_val}"] = is_in_top_k
                             if is_in_top_k: top_k_correct[k_val] += 1
                 except Exception as e_sf: current_result["ssd_cp"] = f"SF_Error: {type(e_sf).__name__} - {e_sf}"
-        
-        # Rule-Based Task Accuracy/F1
         elif args.eval_rule_tasks and data_source == 'P1':
             accuracy_tasks_counts[effective_task_type]["total"] += 1; correct = False
-            if effective_task_type == "predict_move": # Exact match for P1 predict_move if not using Stockfish eval
+            if effective_task_type == "predict_move":
                  if reference_output is not None: correct = (model_processed_output == reference_output)
             elif effective_task_type in ["identify_piece", "identify_color", "is_square_attacked", "can_piece_move", "extract_comment_best_move", "parse_comment_mate_unavoidable"]:
                  if reference_output is not None: correct = (model_processed_output.lower() == str(reference_output).lower())
             elif effective_task_type == "list_legal_moves":
                  if reference_output is not None:
-                    ref_moves = set(str(reference_output).split()) if reference_output else set()
-                    pred_moves = set(model_processed_output.split()) if model_processed_output else set()
-                    
+                    ref_moves = set(str(reference_output).split()) if reference_output else set(); pred_moves = set(model_processed_output.split()) if model_processed_output else set()
                     if not pred_moves and not ref_moves: correct = True; precision = 1.0; recall = 1.0; f1 = 1.0
                     elif pred_moves or ref_moves:
-                        intersect_count = len(ref_moves.intersection(pred_moves))
-                        precision = intersect_count / len(pred_moves) if len(pred_moves) > 0 else 0.0
-                        recall = intersect_count / len(ref_moves) if len(ref_moves) > 0 else 0.0
-                        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-                        correct = math.isclose(f1, 1.0)
-                    else: precision, recall, f1 = 0.0, 0.0, 0.0; correct = False # Should be caught by first case
+                        intersect_count = len(ref_moves.intersection(pred_moves)); precision = intersect_count / len(pred_moves) if len(pred_moves) > 0 else 0.0; recall = intersect_count / len(ref_moves) if len(ref_moves) > 0 else 0.0
+                        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0; correct = math.isclose(f1, 1.0)
+                    else: precision, recall, f1 = 0.0, 0.0, 0.0; correct = False
                     current_result["list_f1"]=round(f1,4); current_result["list_precision"]=round(precision,4); current_result["list_recall"]=round(recall,4)
                     list_legal_metrics_agg["f1"]+=f1; list_legal_metrics_agg["prec"]+=precision; list_legal_metrics_agg["rec"]+=recall; list_legal_metrics_agg["count"]+=1
             current_result["is_correct"] = correct
             if correct: accuracy_tasks_counts[effective_task_type]["correct"] += 1
-
-        # Explanation Metrics Data Collection
         elif args.eval_explanation and data_source == 'P2' and reference_output is not None:
             subtype_for_grouping = parse_task_subtype_from_id(task_id)
-            explanation_data_for_metrics_by_subtype[subtype_for_grouping]["preds"].append(model_processed_output)
-            explanation_data_for_metrics_by_subtype[subtype_for_grouping]["refs"].append(reference_output)
-            
+            explanation_data_by_subtype[subtype_for_grouping]["preds"].append(model_processed_output)
+            explanation_data_by_subtype[subtype_for_grouping]["refs"].append(reference_output)
         results_per_sample.append(current_result)
 
-    # --- Aggregate and Report Metrics ---
-    final_metrics = {} # This will store all aggregated metrics
+    final_metrics = {}
     if args.eval_move_pred:
         final_metrics["average_ssd_cp"] = round(total_ssd_sum / ssd_count, 2) if ssd_count > 0 else None
         if move_prediction_count > 0:
             for k_val in args.top_k_agreement: final_metrics[f"top_{k_val}_agreement_rate"] = round(top_k_correct[k_val] / move_prediction_count, 4)
-
     if args.eval_rule_tasks:
         for task_name, counts in accuracy_tasks_counts.items():
-            if counts["total"] > 0 and task_name != "list_legal_moves":
-                final_metrics[f"{task_name}_accuracy"] = round(counts["correct"] / counts["total"], 4)
+            if counts["total"] > 0 and task_name != "list_legal_moves": final_metrics[f"{task_name}_accuracy"] = round(counts["correct"] / counts["total"], 4)
         if list_legal_metrics_agg["count"] > 0:
             count = list_legal_metrics_agg["count"]
             final_metrics["list_legal_moves_f1_avg"] = round(list_legal_metrics_agg["f1"] / count, 4)
@@ -413,116 +390,126 @@ def main():
     if args.eval_explanation:
         all_preds_for_overall_metrics = []
         all_refs_for_overall_metrics = []
-        
-        num_explanation_samples_processed = 0
-        for subtype, data in explanation_data_for_metrics_by_subtype.items():
-            if data["preds"] and data["refs"]:
-                num_explanation_samples_processed += len(data["preds"])
-                all_preds_for_overall_metrics.extend(data["preds"])
-                all_refs_for_overall_metrics.extend(data["refs"])
+        num_total_explanation_samples = 0
 
+        for subtype, data in explanation_data_by_subtype.items():
+            subtype_preds = data["preds"]
+            subtype_refs = data["refs"]
+            num_subtype_samples = len(subtype_preds)
+
+            if num_subtype_samples > 0:
+                num_total_explanation_samples += num_subtype_samples
+                all_preds_for_overall_metrics.extend(subtype_preds)
+                all_refs_for_overall_metrics.extend(subtype_refs)
+
+                print(f"Calculating explanation metrics for subtype: {subtype} ({num_subtype_samples} samples)...")
                 # Per-subtype BERTScore
                 if BERT_SCORE_AVAILABLE:
                     try:
-                        P_sub, R_sub, F1_sub = bert_score_calculate(data["preds"], data["refs"], lang="en", model_type=args.bert_score_model_type, verbose=False, device=DEVICE, batch_size=args.batch_size*2)
+                        P_sub, R_sub, F1_sub = bert_score_calculate(subtype_preds, subtype_refs, lang="en", model_type=args.bert_score_model_type, verbose=False, device=DEVICE, batch_size=args.batch_size*2)
                         final_metrics[f"bert_score_f1_avg_{subtype}"] = round(F1_sub.mean().item(), 4)
                         final_metrics[f"bert_score_precision_avg_{subtype}"] = round(P_sub.mean().item(), 4)
                         final_metrics[f"bert_score_recall_avg_{subtype}"] = round(R_sub.mean().item(), 4)
-                    except Exception as e_bs_sub: print(f"Error calculating BERTScore for subtype {subtype}: {e_bs_sub}.")
-        
-        print(f"Calculating explanation metrics for {num_explanation_samples_processed} samples...")
+                    except Exception as e: print(f" Error BERTScore subtype {subtype}: {e}")
+                # Per-subtype ROUGE
+                if ROUGE_SCORE_AVAILABLE:
+                    try:
+                        scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
+                        r1_f, r2_f, rL_f = [], [], []
+                        for ref, pred in zip(subtype_refs, subtype_preds):
+                            s = scorer.score(ref, pred)
+                            r1_f.append(s['rouge1'].fmeasure); r2_f.append(s['rouge2'].fmeasure); rL_f.append(s['rougeL'].fmeasure)
+                        final_metrics[f"rouge_1_f1_avg_{subtype}"] = round(np.mean(r1_f), 4) if r1_f else 0.0
+                        final_metrics[f"rouge_2_f1_avg_{subtype}"] = round(np.mean(r2_f), 4) if r2_f else 0.0
+                        final_metrics[f"rouge_l_f1_avg_{subtype}"] = round(np.mean(rL_f), 4) if rL_f else 0.0
+                    except Exception as e: print(f" Error ROUGE subtype {subtype}: {e}")
+                # Per-subtype BLEU
+                if NLTK_AVAILABLE:
+                    try:
+                        tok_refs = [[r.split()] for r in subtype_refs]; tok_preds = [p.split() for p in subtype_preds]
+                        sf = SmoothingFunction()
+                        try: final_metrics[f"bleu_4_avg_{subtype}"] = round(corpus_bleu(tok_refs, tok_preds, weights=(0.25,0.25,0.25,0.25), smoothing_function=sf.method1), 4)
+                        except ValueError: final_metrics[f"bleu_1_avg_{subtype}"] = round(corpus_bleu(tok_refs, tok_preds, weights=(1,0,0,0), smoothing_function=sf.method1), 4)
+                    except Exception as e: print(f" Error BLEU subtype {subtype}: {e}")
+                # Per-subtype Edit Distance
+                if LEVENSHTEIN_AVAILABLE:
+                    try:
+                        norm_ed_sub = [Levenshtein.distance(p, r) / max(len(p), len(r)) if max(len(p),len(r)) > 0 else 0 for p, r in zip(subtype_preds, subtype_refs)]
+                        final_metrics[f"avg_norm_edit_distance_avg_{subtype}"] = round(np.mean(norm_ed_sub), 4) if norm_ed_sub else 0.0
+                    except Exception as e: print(f" Error EditDist subtype {subtype}: {e}")
 
-        if num_explanation_samples_processed > 0:
-            # Overall BERTScore
-            if BERT_SCORE_AVAILABLE and all_preds_for_overall_metrics:
-                print("Calculating Overall BERTScore...")
+        if num_total_explanation_samples > 0:
+            print(f"\nCalculating OVERALL explanation metrics for {num_total_explanation_samples} total samples...")
+            if BERT_SCORE_AVAILABLE:
                 try:
                     P_all, R_all, F1_all = bert_score_calculate(all_preds_for_overall_metrics, all_refs_for_overall_metrics, lang="en", model_type=args.bert_score_model_type, verbose=False, device=DEVICE, batch_size=args.batch_size*2)
                     final_metrics["bert_score_f1_overall"] = round(F1_all.mean().item(), 4)
                     final_metrics["bert_score_precision_overall"] = round(P_all.mean().item(), 4)
                     final_metrics["bert_score_recall_overall"] = round(R_all.mean().item(), 4)
-                except Exception as e_bs_all: print(f"Error calculating overall BERTScore: {e_bs_all}.")
-
-            # ROUGE Scores
-            if ROUGE_SCORE_AVAILABLE and all_preds_for_overall_metrics:
-                print("Calculating ROUGE scores...")
+                except Exception as e: print(f"Error Overall BERTScore: {e}")
+            if ROUGE_SCORE_AVAILABLE:
                 try:
                     scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
-                    r1_f, r2_f, rL_f = [], [], []
+                    r1_f_all, r2_f_all, rL_f_all = [], [], []
                     for ref, pred in zip(all_refs_for_overall_metrics, all_preds_for_overall_metrics):
-                        scores = scorer.score(ref, pred)
-                        r1_f.append(scores['rouge1'].fmeasure)
-                        r2_f.append(scores['rouge2'].fmeasure)
-                        rL_f.append(scores['rougeL'].fmeasure)
-                    final_metrics["rouge_1_f1"] = round(np.mean(r1_f), 4) if r1_f else 0.0
-                    final_metrics["rouge_2_f1"] = round(np.mean(r2_f), 4) if r2_f else 0.0
-                    final_metrics["rouge_l_f1"] = round(np.mean(rL_f), 4) if rL_f else 0.0
-                except Exception as e_rg: print(f"Error calculating ROUGE: {e_rg}")
-
-            # BLEU and Distinct-N Scores
-            if NLTK_AVAILABLE and all_preds_for_overall_metrics:
-                print("Calculating BLEU and Distinct-N scores...")
+                        s = scorer.score(ref, pred)
+                        r1_f_all.append(s['rouge1'].fmeasure); r2_f_all.append(s['rouge2'].fmeasure); rL_f_all.append(s['rougeL'].fmeasure)
+                    final_metrics["rouge_1_f1_overall"] = round(np.mean(r1_f_all), 4) if r1_f_all else 0.0
+                    final_metrics["rouge_2_f1_overall"] = round(np.mean(r2_f_all), 4) if r2_f_all else 0.0
+                    final_metrics["rouge_l_f1_overall"] = round(np.mean(rL_f_all), 4) if rL_f_all else 0.0
+                except Exception as e: print(f"Error Overall ROUGE: {e}")
+            if NLTK_AVAILABLE:
+                tok_refs_all = [[r.split()] for r in all_refs_for_overall_metrics]; tok_preds_all = [p.split() for p in all_preds_for_overall_metrics]
+                sf = SmoothingFunction()
+                try: final_metrics["bleu_4_overall"] = round(corpus_bleu(tok_refs_all, tok_preds_all, weights=(0.25,0.25,0.25,0.25), smoothing_function=sf.method1), 4)
+                except ValueError: final_metrics["bleu_1_overall"] = round(corpus_bleu(tok_refs_all, tok_preds_all, weights=(1,0,0,0), smoothing_function=sf.method1), 4)
+                except Exception as e: print(f"Error Overall BLEU: {e}")
+                
+                all_pred_tokens_flat = [token for pred_tokens_list in tok_preds_all for token in pred_tokens_list if token]
+                if all_pred_tokens_flat:
+                    final_metrics["distinct_1_overall"] = round(len(set(all_pred_tokens_flat)) / len(all_pred_tokens_flat), 4)
+                    bigrams = list(ngrams(all_pred_tokens_flat, 2))
+                    final_metrics["distinct_2_overall"] = round(len(set(bigrams)) / len(bigrams), 4) if bigrams else 0.0
+                else: final_metrics["distinct_1_overall"] = 0.0; final_metrics["distinct_2_overall"] = 0.0
+            if LEVENSHTEIN_AVAILABLE:
                 try:
-                    tokenized_refs = [[ref.split()] for ref in all_refs_for_overall_metrics]
-                    tokenized_preds = [pred.split() for pred in all_preds_for_overall_metrics]
-                    chencherry = SmoothingFunction()
-                    try:
-                        bleu_4_score = corpus_bleu(tokenized_refs, tokenized_preds, weights=(0.25, 0.25, 0.25, 0.25), smoothing_function=chencherry.method1)
-                        final_metrics["bleu_4"] = round(bleu_4_score, 4)
-                    except ValueError: # Handle cases with insufficient n-gram overlap for BLEU-4
-                        try:
-                            bleu_1_score = corpus_bleu(tokenized_refs, tokenized_preds, weights=(1,0,0,0), smoothing_function=chencherry.method1)
-                            final_metrics["bleu_1"] = round(bleu_1_score, 4)
-                            print("Warning: Could not compute BLEU-4, reporting BLEU-1 instead.")
-                        except Exception as e_bleu1: final_metrics["bleu_score_error"] = str(e_bleu1)
-                    
-                    all_pred_tokens_flat = [token for pred_tokens_list in tokenized_preds for token in pred_tokens_list if token]
-                    if all_pred_tokens_flat:
-                        final_metrics["distinct_1"] = round(len(set(all_pred_tokens_flat)) / len(all_pred_tokens_flat), 4) if all_pred_tokens_flat else 0.0
-                        bigrams = list(ngrams(all_pred_tokens_flat, 2))
-                        final_metrics["distinct_2"] = round(len(set(bigrams)) / len(bigrams), 4) if bigrams else 0.0
-                    else: final_metrics["distinct_1"] = 0.0; final_metrics["distinct_2"] = 0.0
-                except Exception as e_nltk: print(f"Error calculating NLTK scores: {e_nltk}")
+                    norm_ed_all = [Levenshtein.distance(p, r) / max(len(p), len(r)) if max(len(p),len(r)) > 0 else 0 for p,r in zip(all_preds_for_overall_metrics, all_refs_for_overall_metrics)]
+                    final_metrics["avg_norm_edit_distance_overall"] = round(np.mean(norm_ed_all), 4) if norm_ed_all else 0.0
+                except Exception as e: print(f"Error Overall EditDist: {e}")
+        else: print("No explanation samples with references to calculate any explanation metrics.")
 
-            # Normalized Edit Distance
-            if LEVENSHTEIN_AVAILABLE and all_preds_for_overall_metrics:
-                print("Calculating Avg Normalized Edit Distance...")
-                try:
-                    norm_edit_distances = []
-                    for ref, pred in zip(all_refs_for_overall_metrics, all_preds_for_overall_metrics):
-                        distance = Levenshtein.distance(pred, ref)
-                        max_len = max(len(pred), len(ref))
-                        norm_edit_distances.append(distance / max_len if max_len > 0 else 0.0)
-                    final_metrics["avg_norm_edit_distance"] = round(np.mean(norm_edit_distances), 4) if norm_edit_distances else 0.0
-                except Exception as e_lev: print(f"Error calculating Edit Distance: {e_lev}")
-        else:
-            print("No explanation samples with references to calculate BERTScore, ROUGE, BLEU, etc.")
-
-
-    # --- Reporting & Saving ---
-    print("\n--- Aggregated Evaluation Metrics ---") # Same reporting logic for console
+    print("\n--- Aggregated Evaluation Metrics ---")
     if not final_metrics and not any(v.get('total',0) > 0 for v in accuracy_tasks_counts.values()): print("No metrics calculated.")
     else:
         print("-- Phase 1 Metrics (Move Pred / Rules) --")
         for metric, value in sorted(final_metrics.items()):
-             is_explanation_metric = any(metric.startswith(p) for p in ["bert_score_", "rouge_", "bleu_", "distinct_", "avg_norm_edit_distance"])
+             is_explanation_metric = any(metric.startswith(p) for p in ["bert_score_", "rouge_", "bleu_", "distinct_", "avg_norm_edit_distance_"]) # Added trailing _ for avg_norm_edit_distance
              if not is_explanation_metric:
                  print(f"{metric.replace('_', ' ').title()}: {value if value is not None else 'N/A'}")
-        
-        print("-- Phase 2 Metrics (Explanation) --")
+        print("\n-- Phase 2 Metrics (Explanation) --") # Added newline for spacing
         for metric, value in sorted(final_metrics.items()):
-             is_explanation_metric = any(metric.startswith(p) for p in ["bert_score_", "rouge_", "bleu_", "distinct_", "avg_norm_edit_distance"])
+             is_explanation_metric = any(metric.startswith(p) for p in ["bert_score_", "rouge_", "bleu_", "distinct_", "avg_norm_edit_distance_"])
              if is_explanation_metric:
                  clean_metric_name = metric
-                 # Attempt to make metric names more readable for console
-                 for p in ["bert_score_", "rouge_", "bleu_", "distinct_", "avg_norm_edit_distance"]:
+                 for p in ["bert_score_", "rouge_", "bleu_", "distinct_", "avg_norm_edit_distance_"]:
                      if metric.startswith(p): clean_metric_name = metric.replace(p, "", 1).strip("_"); break
                  clean_metric_name = clean_metric_name.replace('_overall', ' Overall').replace('_f1', ' F1').replace('_avg', ' Avg').replace('_precision', ' Precision').replace('_recall', ' Recall')
                  clean_metric_name = clean_metric_name.replace('_', ' ').strip().title()
+                 # For subtype metrics, ensure subtype name is preserved and readable
+                 if any(st in metric for st in explanation_data_by_subtype.keys()): # Check if it's a subtype metric
+                     parts = metric.split("_avg_") # e.g. bert_score_f1_avg_P2.1_General -> ["bert_score_f1", "P2.1_General"]
+                     if len(parts) > 1:
+                         metric_base = parts[0]
+                         subtype_name = parts[-1] # Takes the last part as subtype
+                         for p_strip in ["bert_score_", "rouge_", "bleu_", "avg_norm_edit_distance_"]:
+                             if metric_base.startswith(p_strip): metric_base = metric_base.replace(p_strip, "", 1); break
+                         metric_base = metric_base.replace('_f1', ' F1').replace('_precision', ' Prec').replace('_recall', ' Rec') # Shorter names for console
+                         clean_metric_name = f"{subtype_name.replace('_', '.')} {metric_base.replace('_', ' ').strip().title()}"
+                 
                  print(f"{clean_metric_name}: {value if value is not None else 'N/A'}")
     print("\nFluency of explanations: Requires qualitative assessment.")
 
-    if args.output_results_file: # Same saving of detailed results
+    if args.output_results_file:
         output_dir = os.path.dirname(args.output_results_file);
         if output_dir and not os.path.exists(output_dir): os.makedirs(output_dir, exist_ok=True)
         output_to_save = {"args": vars(args), "aggregated_metrics": final_metrics, "accuracy_counts_per_task": dict(accuracy_tasks_counts), "per_sample_results": results_per_sample}
@@ -531,7 +518,7 @@ def main():
             print(f"Detailed results saved to {args.output_results_file}")
         except Exception as e: print(f"Error saving detailed results: {e}")
     
-    if args.output_numerical_summary: # MODIFIED Summary File Output
+    if args.output_numerical_summary:
         numerical_summary_path = args.output_numerical_summary; summary_dir = os.path.dirname(numerical_summary_path)
         if summary_dir and not os.path.exists(summary_dir): os.makedirs(summary_dir, exist_ok=True)
         print(f"\nSaving numerical summary to: {numerical_summary_path}")
@@ -543,18 +530,14 @@ def main():
                 f_summary.write(f"P1 Adapter: {args.phase1_lora_path if args.phase1_lora_path else 'N/A'}\n")
                 f_summary.write(f"P2 Adapter: {args.phase2_lora_path if args.phase2_lora_path else 'N/A'}\n")
                 f_summary.write(f"Test Samples (P1 source): {p1_count}\n"); f_summary.write(f"Test Samples (P2 source): {p2_count}\n")
-                f_summary.write("\n--- Aggregated Metrics ---\n") # Changed header slightly
-                
-                # Print all metrics from final_metrics, using their raw keys for easy parsing
-                for metric, value in sorted(final_metrics.items()):
+                f_summary.write("\n--- Aggregated Metrics ---\n")
+                for metric, value in sorted(final_metrics.items()): # Raw keys for easy parsing
                     f_summary.write(f"{metric}: {value if value is not None else 'N/A'}\n")
-
                 f_summary.write("\n--- Rule-Based Task Counts (Correct/Total) ---\n")
                 for task_name, counts_dict in sorted(accuracy_tasks_counts.items()):
                      if counts_dict["total"] > 0:
-                        correct_count = counts_dict["correct"]
-                        total_count = counts_dict["total"]
-                        f_summary.write(f"{task_name.replace('_', ' ').title()}_counts: {correct_count}/{total_count}\n") # Added _counts for clarity
+                        correct_count = counts_dict["correct"]; total_count = counts_dict["total"]
+                        f_summary.write(f"{task_name.replace('_', ' ').title()}_counts: {correct_count}/{total_count}\n")
             print(f"Numerical summary saved to {numerical_summary_path}")
         except Exception as e: print(f"Error saving numerical summary: {e}")
 
