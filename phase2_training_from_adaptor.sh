@@ -36,12 +36,12 @@ python phase2_training.py \
     --val_folder training_data/phase2_corrected/val/ \
     --test_folder training_data/phase2_corrected/test/ \
     --tokenized_data_path training_data/phase2/ \
-    --output_dir ./training_output/tinyllama_phase2_from_LoRA_conti_final \
+    --output_dir ./training_output/tinyllama_phase2_from_LoRA_conti_final_corrected \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
     --num_train_epochs 10 \
-    --per_device_train_batch_size 4 \
-    --per_device_eval_batch_size 4 \
+    --per_device_train_batch_size 8 \
+    --per_device_eval_batch_size 64 \
     --gradient_accumulation_steps 4 \
     --learning_rate 1e-4 \
     --weight_decay 0.01 \
