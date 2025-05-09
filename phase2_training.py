@@ -285,6 +285,7 @@ def main():
                 adapter_name=combined_adapter_name,
                 combination_type="linear"
             )
+        model.set_adapter(combined_adapter_name)
         print(f"Phase 2 adapter '{args.output_adapter_name}' added. Active adapters set to: {model.active_adapters}.")
     else:
         print(f"No Phase 1 adapter provided. Training new LoRA adapter '{args.output_adapter_name}' directly on base model for Phase 2 task.")
