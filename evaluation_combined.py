@@ -79,10 +79,7 @@ def get_stockfish_analysis(board: chess.Board, engine: chess.engine.SimpleEngine
                 if score_obj: results["scores_cp_after_move"].append(score_obj.white().score(mate_score=10000))
                 else: results["scores_cp_after_move"].append(None)
         return results
-    except (chess.engine.EngineTerminatedError, chess.engine.EngineError, Exception) as e:
-        # print(f"Debug: Stockfish analysis error: {e}") # Optional for debugging
-        return results
-
+    except (chess.engine.EngineTerminatedError, chess.engine.EngineError, Exception): return results
 
 def post_process_model_output(raw_text: str, task_type: str,
                               teacher_task_instruction: Optional[str]=None,
@@ -97,7 +94,6 @@ def post_process_model_output(raw_text: str, task_type: str,
     ]
     for bp_pattern in common_boilerplate_patterns:
         processed_text = re.sub(bp_pattern, "", processed_text, flags=re.IGNORECASE | re.DOTALL).strip()
-    
     prompt_guidance_echoes = [
         r"\(e\.g\., central control.*opening ideas\)\.", r"opening ideas\)\.",
         r"piece activation, opening ideas\)\.", r"\d+ resulted in '[^']+'. Explain concisely.+position\.",
@@ -108,7 +104,6 @@ def post_process_model_output(raw_text: str, task_type: str,
         if match:
             processed_text = temp_text_for_echo_check[match.end():].strip()
             processed_text = re.sub(r"^\s*\[assistant\]\s*", "", processed_text, flags=re.IGNORECASE).strip()
-
     task_type_lower = task_type.lower()
     if task_type_lower == "predict_move":
         text_to_search = processed_text
@@ -149,7 +144,6 @@ def post_process_model_output(raw_text: str, task_type: str,
     elif task_type_lower == "extract_comment_best_move":
         san_match = re.match(r"^\s*([PNBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[PNBRQK])?|O-O(?:-O)?)\b", processed_text)
         return san_match.group(1) if san_match else processed_text.split(" ")[0] if processed_text else ""
-
     if is_explanation_task:
         sentences = re.split(r'(?<=[.!?])\s+', processed_text)
         max_sentences = 4
@@ -168,6 +162,22 @@ def parse_task_subtype_from_id(task_id: str) -> str:
         return "_".join(parts[3:])
     elif len(parts) >= 4: return parts[3]
     return "unknown_subtype"
+
+def convert_numpy_types(obj):
+    """ Recursively converts NumPy types to native Python types for JSON serialization. """
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {k: convert_numpy_types(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(i) for i in obj]
+    elif isinstance(obj, (bool, np.bool_)): # Handle numpy bool
+        return bool(obj)
+    return obj
 
 def main():
     parser = argparse.ArgumentParser(description="Evaluate model on chess tasks.")
@@ -280,23 +290,13 @@ def main():
     if not all_data_items_to_process: print("No samples loaded. Exiting."); sys.exit(0)
     random.shuffle(all_data_items_to_process); print(f"Total samples for evaluation: {len(all_data_items_to_process)}")
 
-    # --- Metric Collection Setup ---
     results_per_sample = []
-    # For Stockfish SSD and new deltas, keyed by K_ref
-    ssds_by_k = defaultdict(list)
-    ssd_counts_by_k = defaultdict(int)
-    deltas_llm_vs_sf_wpov_by_k = defaultdict(list)
-    deltas_sf_vs_gt_wpov_by_k = defaultdict(list)
-    # For Top-K agreement rates
-    top_k_correct = {k: 0 for k in args.top_k_agreement}
-    move_prediction_count = 0 # Total P1 predict_move samples for which SF eval was attempted
-    # For LLM vs GT comparison (GT is fixed, so not by K_ref)
-    llm_better_than_gt_count = 0
-    deltas_llm_vs_gt_cp = [] # List to store individual delta_llm_vs_gt_cp values
-    comparison_with_gt_possible_count = 0 # Counts samples where LLM move, GT move, and their evals were valid
-    # For other metrics
+    ssds_by_k = defaultdict(list); ssd_counts_by_k = defaultdict(int)
+    deltas_llm_vs_sf_wpov_by_k = defaultdict(list); deltas_sf_vs_gt_wpov_by_k = defaultdict(list)
+    top_k_correct = {k: 0 for k in args.top_k_agreement}; move_prediction_count = 0
+    llm_better_than_gt_count = 0; deltas_llm_vs_gt_cp = []; comparison_with_gt_possible_count = 0
     explanation_data_by_subtype = defaultdict(lambda: {"preds": [], "refs": []})
-    accuracy_tasks_counts = defaultdict(lambda: {"correct": 0, "total": 0}) # Will store counts for predict_move_em, predict_move_sf_in_topK, and other rule tasks
+    accuracy_tasks_counts = defaultdict(lambda: {"correct": 0, "total": 0})
     list_legal_metrics_agg = {"f1": 0.0, "prec": 0.0, "rec": 0.0, "count": 0}
 
     prompts_for_inference = [item['input'] for item in all_data_items_to_process if 'input' in item]
@@ -353,26 +353,15 @@ def main():
         
         model_processed_output = post_process_model_output(model_raw_output, effective_task_type, None, reference_output, is_explanation_task_flag)
         current_result = {"task_id": task_id, "task_type": effective_task_type, "data_source": data_source, "input_prompt": input_prompt_str, "model_raw_output": model_raw_output, "model_processed_output": model_processed_output, "reference_output": reference_output, 
-                          "is_correct_em": None, # For predict_move EM
-                          "list_f1": None, "list_precision": None, "list_recall": None, # For list_legal_moves
-                          "is_correct": None, # General correctness for other P1 rule tasks
-                          # Fields for new delta metrics
-                          "eval_llm_move_cp": None, "eval_after_gt_move_cp": None,
-                          "delta_llm_vs_gt_cp": None, "llm_better_than_gt": None,
-                         }
-        # Initialize K-specific fields for predict_move
+                          "is_correct_em": None, "list_f1": None, "list_precision": None, "list_recall": None, "is_correct": None, 
+                          "eval_llm_move_cp": None, "eval_after_gt_move_cp": None, "delta_llm_vs_gt_cp": None, "llm_better_than_gt": None}
         for k_ref in args.sf_reference_ks:
-            current_result[f"stockfish_baseline_k{k_ref}_eval_cp"] = None
-            current_result[f"ssd_cp_vs_sf_top{k_ref}"] = None
-            current_result[f"delta_llm_vs_sf_wpov_vs_top{k_ref}"] = None
-            current_result[f"delta_sf_vs_gt_wpov_vs_top{k_ref}"] = None
-        for k_agree in args.top_k_agreement:
-            current_result[f"is_correct_sf_in_top{k_agree}"] = None # is LLM move in SF top K?
-            current_result[f"in_top_{k_agree}"] = None # Redundant if above is used, but kept for compatibility
+            current_result[f"stockfish_baseline_k{k_ref}_eval_cp"] = None; current_result[f"ssd_cp_vs_sf_top{k_ref}"] = None
+            current_result[f"delta_llm_vs_sf_wpov_vs_top{k_ref}"] = None; current_result[f"delta_sf_vs_gt_wpov_vs_top{k_ref}"] = None
+        for k_agree in args.top_k_agreement: current_result[f"is_correct_sf_in_top{k_agree}"] = None; current_result[f"in_top_{k_agree}"] = None
 
         if data_source == 'P1':
-            fen_from_prompt = None
-            fen_match = re.search(r"\[FEN\]\s*(.*?)\s*\[SEP\]", input_prompt_str)
+            fen_from_prompt = None; fen_match = re.search(r"\[FEN\]\s*(.*?)\s*\[SEP\]", input_prompt_str)
             if fen_match: fen_from_prompt = fen_match.group(1).strip()
 
             if effective_task_type == "predict_move":
@@ -409,7 +398,9 @@ def main():
                                 llm_move_uci = llm_move_obj.uci()
                             except: llm_move_obj = None
                         
-                        multipv_needed = max(max(args.top_k_agreement or [1]), max(args.sf_reference_ks or [1]))
+                        multipv_needed = 1
+                        if args.top_k_agreement: multipv_needed = max(multipv_needed, max(args.top_k_agreement))
+                        if args.sf_reference_ks: multipv_needed = max(multipv_needed, max(args.sf_reference_ks))
                         sf_analysis = get_stockfish_analysis(board_for_sf, stockfish_engine, time_limit=args.stockfish_analysis_time, multipv=multipv_needed)
                         
                         eval_llm_cp = None
@@ -420,7 +411,7 @@ def main():
                             current_result["eval_llm_move_cp"] = eval_llm_cp
                         
                         eval_gt_cp = None
-                        if reference_output: # GT move processing
+                        if reference_output:
                             gt_move_obj = None
                             try: gt_move_obj = board_for_sf.parse_uci(reference_output)
                             except: pass
@@ -431,52 +422,38 @@ def main():
                                 current_result["eval_after_gt_move_cp"] = eval_gt_cp
                         
                         if sf_analysis["scores_cp_after_move"]:
-                            # Always store Top-1 SF info for reference (not necessarily the baseline for SSD)
-                            current_result["stockfish_top1_uci"] = sf_analysis["top_moves_uci"][0]
+                            current_result["stockfish_top1_uci"] = sf_analysis["top_moves_uci"][0] # Always store actual Top-1
                             current_result["stockfish_top1_eval_cp"] = sf_analysis["scores_cp_after_move"][0]
 
                             for k_ref in args.sf_reference_ks:
-                                eval_sf_baseline_cp_k = None
-                                actual_sf_moves_count = len(sf_analysis["scores_cp_after_move"])
-                                if 1 <= k_ref <= actual_sf_moves_count:
-                                    eval_sf_baseline_cp_k = sf_analysis["scores_cp_after_move"][k_ref - 1]
-                                elif actual_sf_moves_count > 0: # Fallback if k_ref is out of bounds
-                                    eval_sf_baseline_cp_k = sf_analysis["scores_cp_after_move"][0] # Fallback to top-1
-                                current_result[f"stockfish_baseline_k{k_ref}_eval_cp"] = eval_sf_baseline_cp_k
-
+                                eval_sf_baseline_cp_k = None; actual_sf_moves_count = len(sf_analysis["scores_cp_after_move"])
+                                valid_k_for_ref = k_ref
+                                if not (1 <= k_ref <= actual_sf_moves_count): valid_k_for_ref = 1 
+                                if actual_sf_moves_count > 0: eval_sf_baseline_cp_k = sf_analysis["scores_cp_after_move"][valid_k_for_ref - 1]
+                                current_result[f"stockfish_baseline_k{k_ref}_eval_cp"] = eval_sf_baseline_cp_k # Use original k_ref for logging
                                 if eval_sf_baseline_cp_k is not None and eval_llm_cp is not None:
                                     ssd_k = (eval_sf_baseline_cp_k - eval_llm_cp) if board_for_sf.turn == chess.WHITE else (eval_llm_cp - eval_sf_baseline_cp_k)
-                                    current_result[f"ssd_cp_vs_sf_top{k_ref}"] = ssd_k
-                                    ssds_by_k[k_ref].append(ssd_k)
-                                    ssd_counts_by_k[k_ref] += 1
-                                    
+                                    current_result[f"ssd_cp_vs_sf_top{k_ref}"] = ssd_k; ssds_by_k[k_ref].append(ssd_k); ssd_counts_by_k[k_ref] += 1
                                     delta_llm_sf_k = eval_llm_cp - eval_sf_baseline_cp_k
-                                    current_result[f"delta_llm_vs_sf_wpov_vs_top{k_ref}"] = delta_llm_sf_k
-                                    deltas_llm_vs_sf_wpov_by_k[k_ref].append(delta_llm_sf_k)
-                                
+                                    current_result[f"delta_llm_vs_sf_wpov_vs_top{k_ref}"] = delta_llm_sf_k; deltas_llm_vs_sf_wpov_by_k[k_ref].append(delta_llm_sf_k)
                                 if eval_sf_baseline_cp_k is not None and eval_gt_cp is not None:
                                     delta_sf_gt_k = eval_sf_baseline_cp_k - eval_gt_cp
-                                    current_result[f"delta_sf_vs_gt_wpov_vs_top{k_ref}"] = delta_sf_gt_k
-                                    deltas_sf_vs_gt_wpov_by_k[k_ref].append(delta_sf_gt_k)
-
-                        if eval_llm_cp is not None and eval_gt_cp is not None: # For LLM vs GT (independent of sf_reference_ks)
-                            comparison_with_gt_possible_count += 1
-                            delta_lg = eval_llm_cp - eval_gt_cp
+                                    current_result[f"delta_sf_vs_gt_wpov_vs_top{k_ref}"] = delta_sf_gt_k; deltas_sf_vs_gt_wpov_by_k[k_ref].append(delta_sf_gt_k)
+                        
+                        if eval_llm_cp is not None and eval_gt_cp is not None:
+                            comparison_with_gt_possible_count += 1; delta_lg = eval_llm_cp - eval_gt_cp
                             current_result["delta_llm_vs_gt_cp"] = delta_lg; deltas_llm_vs_gt_cp.append(delta_lg)
                             llm_is_better = (eval_llm_cp > eval_gt_cp) if board_for_sf.turn == chess.WHITE else (eval_llm_cp < eval_gt_cp)
                             current_result["llm_better_than_gt"] = llm_is_better
                             if llm_is_better: llm_better_than_gt_count += 1
 
-                        # Top-K agreement rates and "in_topK" accuracies
-                        for k_agree in args.top_k_agreement:
-                            is_in_k = (llm_move_uci in sf_analysis["top_moves_uci"][:k_agree]) if llm_move_uci and sf_analysis["top_moves_uci"] else False
-                            current_result[f"in_top_{k_agree}"] = is_in_k # For backward compatibility/detailed per-sample
+                        for k_agree in args.top_k_agreement: # Top-K agreement rates and "in_topK" accuracies
+                            is_in_k = (llm_move_uci in sf_analysis.get("top_moves_uci", [])[:k_agree]) if llm_move_uci else False
+                            current_result[f"in_top_{k_agree}"] = is_in_k
                             current_result[f"is_correct_sf_in_top{k_agree}"] = is_in_k
-                            if sf_analysis["top_moves_uci"]: # Only count if SF analysis was successful
+                            if sf_analysis.get("top_moves_uci"): # Only count if SF analysis provided moves
                                 accuracy_tasks_counts[f'predict_move_sf_in_top{k_agree}']["total"] += 1
-                                if is_in_k: 
-                                    top_k_correct[k_agree] += 1
-                                    accuracy_tasks_counts[f'predict_move_sf_in_top{k_agree}']["correct"] += 1
+                                if is_in_k: top_k_correct[k_agree] += 1; accuracy_tasks_counts[f'predict_move_sf_in_top{k_agree}']["correct"] += 1
                     except Exception as e_sf_main: current_result["stockfish_error"] = f"SF_Main_Error: {type(e_sf_main).__name__} - {e_sf_main}"
             
             elif args.eval_rule_tasks: # Other P1 rule tasks
@@ -500,25 +477,19 @@ def main():
             subtype_for_grouping = parse_task_subtype_from_id(task_id)
             explanation_data_by_subtype[subtype_for_grouping]["preds"].append(model_processed_output)
             explanation_data_by_subtype[subtype_for_grouping]["refs"].append(reference_output)
-            
         results_per_sample.append(current_result)
 
     # --- Aggregate and Report Metrics ---
     final_metrics = {}
     if args.eval_move_pred:
         for k_ref_val in args.sf_reference_ks:
-            if ssd_counts_by_k[k_ref_val] > 0:
-                final_metrics[f"average_ssd_cp_vs_sf_top{k_ref_val}"] = round(sum(ssds_by_k[k_ref_val]) / ssd_counts_by_k[k_ref_val], 2)
-            else:
-                final_metrics[f"average_ssd_cp_vs_sf_top{k_ref_val}"] = None
-            
+            final_metrics[f"average_ssd_cp_vs_sf_top{k_ref_val}"] = round(sum(ssds_by_k[k_ref_val]) / ssd_counts_by_k[k_ref_val], 2) if ssd_counts_by_k[k_ref_val] > 0 else None
             if deltas_llm_vs_sf_wpov_by_k[k_ref_val]:
                 final_metrics[f"avg_delta_llm_vs_sf_wpov_vs_top{k_ref_val}"] = round(np.mean(deltas_llm_vs_sf_wpov_by_k[k_ref_val]), 2)
                 final_metrics[f"median_delta_llm_vs_sf_wpov_vs_top{k_ref_val}"] = round(np.median(deltas_llm_vs_sf_wpov_by_k[k_ref_val]), 2)
                 final_metrics[f"stddev_delta_llm_vs_sf_wpov_vs_top{k_ref_val}"] = round(np.std(deltas_llm_vs_sf_wpov_by_k[k_ref_val]), 2)
             else:
                 for stat in ["avg", "median", "stddev"]: final_metrics[f"{stat}_delta_llm_vs_sf_wpov_vs_top{k_ref_val}"] = None
-
             if deltas_sf_vs_gt_wpov_by_k[k_ref_val]:
                 final_metrics[f"avg_delta_sf_vs_gt_wpov_vs_top{k_ref_val}"] = round(np.mean(deltas_sf_vs_gt_wpov_by_k[k_ref_val]), 2)
                 final_metrics[f"median_delta_sf_vs_gt_wpov_vs_top{k_ref_val}"] = round(np.median(deltas_sf_vs_gt_wpov_by_k[k_ref_val]), 2)
@@ -526,17 +497,13 @@ def main():
             else:
                 for stat in ["avg", "median", "stddev"]: final_metrics[f"{stat}_delta_sf_vs_gt_wpov_vs_top{k_ref_val}"] = None
 
-        if move_prediction_count > 0: # Denominator for Top-K rates
-            for k_val in args.top_k_agreement: 
-                final_metrics[f"top_{k_val}_agreement_rate"] = round(top_k_correct[k_val] / move_prediction_count, 4)
-        
-        if comparison_with_gt_possible_count > 0: # For LLM vs GT (fixed GT, so not by K_ref)
+        if move_prediction_count > 0:
+            for k_val in args.top_k_agreement: final_metrics[f"top_{k_val}_agreement_rate"] = round(top_k_correct[k_val] / move_prediction_count, 4)
+        if comparison_with_gt_possible_count > 0:
             final_metrics["llm_better_than_gt_rate"] = round(llm_better_than_gt_count / comparison_with_gt_possible_count, 4)
             if deltas_llm_vs_gt_cp:
-                final_metrics["avg_delta_llm_vs_gt_cp"] = round(np.mean(deltas_llm_vs_gt_cp), 2)
-                final_metrics["median_delta_llm_vs_gt_cp"] = round(np.median(deltas_llm_vs_gt_cp), 2)
-                final_metrics["stddev_delta_llm_vs_gt_cp"] = round(np.std(deltas_llm_vs_gt_cp), 2)
-                final_metrics["min_delta_llm_vs_gt_cp"] = round(np.min(deltas_llm_vs_gt_cp), 2)
+                final_metrics["avg_delta_llm_vs_gt_cp"] = round(np.mean(deltas_llm_vs_gt_cp), 2); final_metrics["median_delta_llm_vs_gt_cp"] = round(np.median(deltas_llm_vs_gt_cp), 2)
+                final_metrics["stddev_delta_llm_vs_gt_cp"] = round(np.std(deltas_llm_vs_gt_cp), 2); final_metrics["min_delta_llm_vs_gt_cp"] = round(np.min(deltas_llm_vs_gt_cp), 2)
                 final_metrics["max_delta_llm_vs_gt_cp"] = round(np.max(deltas_llm_vs_gt_cp), 2)
         else:
             final_metrics["llm_better_than_gt_rate"] = None
@@ -545,28 +512,19 @@ def main():
     if args.eval_rule_tasks:
         for task_name, counts in accuracy_tasks_counts.items():
             if counts["total"] > 0:
-                if task_name == "predict_move_em": 
-                    final_metrics["predict_move_em_accuracy"] = round(counts["correct"] / counts["total"], 4)
-                elif task_name.startswith("predict_move_sf_in_top"): # e.g. predict_move_sf_in_top1
-                    final_metrics[f"{task_name}_accuracy"] = round(counts["correct"] / counts["total"], 4)
-                elif task_name != "list_legal_moves" and not task_name.startswith("predict_move_sf_"): # Other general rule tasks
-                    final_metrics[f"{task_name}_accuracy"] = round(counts["correct"] / counts["total"], 4)
+                if task_name == "predict_move_em": final_metrics["predict_move_em_accuracy"] = round(counts["correct"] / counts["total"], 4)
+                elif task_name.startswith("predict_move_sf_in_top"): final_metrics[f"{task_name}_accuracy"] = round(counts["correct"] / counts["total"], 4)
+                elif task_name != "list_legal_moves": final_metrics[f"{task_name}_accuracy"] = round(counts["correct"] / counts["total"], 4)
         if list_legal_metrics_agg["count"] > 0:
             count = list_legal_metrics_agg["count"]
-            final_metrics["list_legal_moves_f1_avg"] = round(list_legal_metrics_agg["f1"] / count, 4)
-            final_metrics["list_legal_moves_precision_avg"] = round(list_legal_metrics_agg["prec"] / count, 4)
-            final_metrics["list_legal_moves_recall_avg"] = round(list_legal_metrics_agg["rec"] / count, 4)
+            final_metrics["list_legal_moves_f1_avg"] = round(list_legal_metrics_agg["f1"] / count, 4); final_metrics["list_legal_moves_precision_avg"] = round(list_legal_metrics_agg["prec"] / count, 4); final_metrics["list_legal_moves_recall_avg"] = round(list_legal_metrics_agg["rec"] / count, 4)
 
-    # ... (Explanation metrics calculation - same as before, using explanation_data_by_subtype) ...
-    if args.eval_explanation:
-        all_preds_for_overall_metrics = []
-        all_refs_for_overall_metrics = []
-        num_total_explanation_samples = 0
+    if args.eval_explanation: # Explanation metrics aggregation remains the same
+        all_preds_for_overall_metrics = []; all_refs_for_overall_metrics = []; num_total_explanation_samples = 0
         for subtype, data in explanation_data_by_subtype.items():
             subtype_preds = data["preds"]; subtype_refs = data["refs"]; num_subtype_samples = len(subtype_preds)
             if num_subtype_samples > 0:
-                num_total_explanation_samples += num_subtype_samples
-                all_preds_for_overall_metrics.extend(subtype_preds); all_refs_for_overall_metrics.extend(subtype_refs)
+                num_total_explanation_samples += num_subtype_samples; all_preds_for_overall_metrics.extend(subtype_preds); all_refs_for_overall_metrics.extend(subtype_refs)
                 print(f"Calculating explanation metrics for subtype: {subtype} ({num_subtype_samples} samples)...")
                 if BERT_SCORE_AVAILABLE:
                     try:
@@ -581,8 +539,7 @@ def main():
                     except Exception as e: print(f" Error ROUGE subtype {subtype}: {e}")
                 if NLTK_AVAILABLE:
                     try:
-                        tok_refs = [[r.split()] for r in subtype_refs]; tok_preds = [p.split() for p in subtype_preds]; sf = SmoothingFunction()
-                        bleu_val_sub = None
+                        tok_refs = [[r.split()] for r in subtype_refs]; tok_preds = [p.split() for p in subtype_preds]; sf = SmoothingFunction(); bleu_val_sub = None
                         try: bleu_val_sub = corpus_bleu(tok_refs, tok_preds, weights=(0.25,0.25,0.25,0.25), smoothing_function=sf.method1); final_metrics[f"bleu_4_avg_{subtype}"] = round(bleu_val_sub, 4)
                         except ValueError: bleu_val_sub = corpus_bleu(tok_refs, tok_preds, weights=(1,0,0,0), smoothing_function=sf.method1); final_metrics[f"bleu_1_avg_{subtype}"] = round(bleu_val_sub, 4)
                         except Exception: pass 
@@ -599,13 +556,13 @@ def main():
                     P_all, R_all, F1_all = bert_score_calculate(all_preds_for_overall_metrics, all_refs_for_overall_metrics, lang="en", model_type=args.bert_score_model_type, verbose=False, device=DEVICE, batch_size=args.batch_size*2)
                     final_metrics["bert_score_f1_overall"] = round(F1_all.mean().item(), 4); final_metrics["bert_score_precision_overall"] = round(P_all.mean().item(), 4); final_metrics["bert_score_recall_overall"] = round(R_all.mean().item(), 4)
                 except Exception as e: print(f"Error Overall BERTScore: {e}")
-            if ROUGE_SCORE_AVAILABLE:
+            if ROUGE_SCORE_AVAILABLE: # ... same overall ROUGE ...
                 try:
                     scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True); r1_f_all, r2_f_all, rL_f_all = [], [], []
                     for ref, pred in zip(all_refs_for_overall_metrics, all_preds_for_overall_metrics): s = scorer.score(ref, pred); r1_f_all.append(s['rouge1'].fmeasure); r2_f_all.append(s['rouge2'].fmeasure); rL_f_all.append(s['rougeL'].fmeasure)
                     final_metrics["rouge_1_f1_overall"] = round(np.mean(r1_f_all), 4) if r1_f_all else 0.0; final_metrics["rouge_2_f1_overall"] = round(np.mean(r2_f_all), 4) if r2_f_all else 0.0; final_metrics["rouge_l_f1_overall"] = round(np.mean(rL_f_all), 4) if rL_f_all else 0.0
                 except Exception as e: print(f"Error Overall ROUGE: {e}")
-            if NLTK_AVAILABLE:
+            if NLTK_AVAILABLE: # ... same overall BLEU & Distinct ...
                 tok_refs_all = [[r.split()] for r in all_refs_for_overall_metrics]; tok_preds_all = [p.split() for p in all_preds_for_overall_metrics]; sf = SmoothingFunction(); bleu_val_overall = None
                 try: bleu_val_overall = corpus_bleu(tok_refs_all, tok_preds_all, weights=(0.25,0.25,0.25,0.25), smoothing_function=sf.method1); final_metrics["bleu_4_overall"] = round(bleu_val_overall, 4)
                 except ValueError: bleu_val_overall = corpus_bleu(tok_refs_all, tok_preds_all, weights=(1,0,0,0), smoothing_function=sf.method1); final_metrics["bleu_1_overall"] = round(bleu_val_overall, 4)
@@ -615,13 +572,12 @@ def main():
                     final_metrics["distinct_1_overall"] = round(len(set(all_pred_tokens_flat)) / len(all_pred_tokens_flat), 4)
                     bigrams = list(ngrams(all_pred_tokens_flat, 2)); final_metrics["distinct_2_overall"] = round(len(set(bigrams)) / len(bigrams), 4) if bigrams else 0.0
                 else: final_metrics["distinct_1_overall"] = 0.0; final_metrics["distinct_2_overall"] = 0.0
-            if LEVENSHTEIN_AVAILABLE:
+            if LEVENSHTEIN_AVAILABLE: # ... same overall Edit Distance ...
                 try:
                     norm_ed_all = [Levenshtein.distance(p, r) / max(len(p), len(r)) if max(len(p),len(r)) > 0 else 0 for p,r in zip(all_preds_for_overall_metrics, all_refs_for_overall_metrics)]
                     final_metrics["avg_norm_edit_distance_overall"] = round(np.mean(norm_ed_all), 4) if norm_ed_all else 0.0
                 except Exception as e: print(f"Error Overall EditDist: {e}")
         else: print("No explanation samples with references to calculate any explanation metrics.")
-
 
     # --- Reporting & Saving ---
     print("\n--- Aggregated Evaluation Metrics ---")
@@ -646,7 +602,14 @@ def main():
     if args.output_results_file:
         output_dir = os.path.dirname(args.output_results_file);
         if output_dir and not os.path.exists(output_dir): os.makedirs(output_dir, exist_ok=True)
-        output_to_save = {"args": vars(args), "aggregated_metrics": final_metrics, "accuracy_counts_per_task": dict(accuracy_tasks_counts), "per_sample_results": results_per_sample}
+        
+        # Convert numpy types before saving
+        output_to_save = {
+            "args": convert_numpy_types(vars(args)),
+            "aggregated_metrics": convert_numpy_types(final_metrics),
+            "accuracy_counts_per_task": convert_numpy_types(dict(accuracy_tasks_counts)),
+            "per_sample_results": convert_numpy_types(results_per_sample)
+        }
         try:
             with open(args.output_results_file, "w") as f: json.dump(output_to_save, f, indent=4)
             print(f"Detailed results saved to {args.output_results_file}")
@@ -664,7 +627,7 @@ def main():
                 f_summary.write(f"P1 Adapter: {args.phase1_lora_path if args.phase1_lora_path else 'N/A'}\n")
                 f_summary.write(f"P2 Adapter: {args.phase2_lora_path if args.phase2_lora_path else 'N/A'}\n")
                 f_summary.write(f"Test Samples (P1 source): {p1_count}\n"); f_summary.write(f"Test Samples (P2 source): {p2_count}\n")
-                if args.eval_move_pred: f_summary.write(f"SF Reference Ks for SSD/Delta: {args.sf_reference_ks}\n")
+                if args.eval_move_pred: f_summary.write(f"SF Reference Ks for SSD/Delta: {args.sf_reference_ks}\n") # Log K list
                 f_summary.write("\n--- Aggregated Metrics ---\n")
                 for metric, value in sorted(final_metrics.items()):
                     f_summary.write(f"{metric}: {value if value is not None else 'N/A'}\n")
