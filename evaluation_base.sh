@@ -35,7 +35,7 @@ python evaluation.py \
     --stockfish_path ../stockfish-11-linux/Linux/stockfish_20011801_x64 \
     --output_results_file ./evaluation_results/base/result.json \
     --output_numerical_summary ./evaluation_results/base/summary.txt \
-    --inference_cache_folder ./evaluation_results/inference_cache \
+    --inference_cache_folder ./evaluation_results/base_inference_cache \
     --base_model_cache_dir ./hf_cache \
     --max_p1_eval_samples 10000 \
     --max_p2_eval_samples 1000 \
