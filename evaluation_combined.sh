@@ -19,12 +19,12 @@ if [ "$VERSION" = "v1" ]; then
 elif [ "$VERSION" = "v2" ]; then
     PATH1="checkpoints/phase2_from_conti_final-800/phase1_move_predictor/"
     PATH2="checkpoints/phase2_from_conti_final-800/phase2_explainer_lora/"
-elif [ "$VERSION" = "v3" ]; then
+elif [ "$VERSION" = "v3" ]; then # our pipeline
     PATH1="checkpoints/phase1_conti_final/"
     PATH2="checkpoints/phase2_corrected-final/phase2_explainer_lora/"
-elif [ "$VERSION" = "v3_test" ]; then
-    PATH1="checkpoints/phase2_corrected-2200/phase1_move_predictor"
-    PATH2="checkpoints/phase2_corrected-2200/phase2_explainer_lora"
+elif [ "$VERSION" = "v4" ]; then # seperate LoRA
+    PATH1="checkpoints/phase1_conti_final/"
+    PATH2="checkpoints/LoRA2_only_explainer_lora_v2/"
 else
     echo "Unknown version: $VERSION"
 fi
