@@ -58,9 +58,9 @@ python phase2_training.py \
     --report_to "tensorboard" \
     --seed 42 \
     --load_in_4bit \
-    --max_train_samples 4000 \
-    --max_val_samples 200 \
-    --max_test_samples 200 \
+    --max_train_samples 10000 \
+    --max_val_samples 400 \
+    --max_test_samples 400 \
     --gradient_checkpointing 
     # --gradient_checkpointing_use_reentrant False # This is already the default in the script's argparse
     # --vram_log_multiplier 1 # Optional: To control VRAM logging frequency relative to logging_steps. Default is 1.
