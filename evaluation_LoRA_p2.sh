@@ -30,17 +30,25 @@ cd /home/skuo/2025Spring_AI_Project
 
 python evaluation.py \
     --model_name "TinyLLaMA" \
-    --lora_adapter_path training_output/tinyllama_phase1/TinyLLaMA_07070558/checkpoint-1000 \
-    --test_file training_data/phase2_corrected/test/data_slice_200_to_999_part_100_to_199.jsonl \
-    --stockfish_path ../stockfish/stockfish-ubuntu-x86-64 \
-    --output_results_file ./evaluation_results/tinyllama_phase1_LoRA_p2_eval.json \
+    --lora_adapter_path training_output/tinyllama_phase2_from_LoRA_checkpoint-10000/TinyLLaMA_phase2_20250508_08140932/phase2_explainer_lora/phase2_explainer_lora/ \
+    --test_file training_data/phase1/test.jsonl \
+    --explanation_test_folder training_data/phase2_corrected/test \
+    --stockfish_path ../stockfish-11-linux/Linux/stockfish_20011801_x64 \
+    --output_results_file ./evaluation_results/phase2_explainer_lora/result.json \
+    --output_numerical_summary ./evaluation_results/phase2_explainer_lora/summary.txt \
+    --inference_cache_folder ./evaluation_results/inference_cache \
     --base_model_cache_dir ./hf_cache \
-    --stockfish_analysis_time 0.5 \
-    --top_k_agreement 1 3 \
+    --max_p1_eval_samples 10000 \
+    --max_p2_eval_samples 1000 \
+    --eval_move_pred \
+    --eval_rule_tasks \
+    --eval_explanation \
+    --stockfish_analysis_time 0.3 \
+    --top_k_agreement 1 3 5 10 50 100 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
-    --max_eval_samples 100 \
     --max_seq_length 1024 \
-    --batch_size 8 \
-    --load_in_4bit \
-    --seed 42
+    --batch_size 64 \
+    --seed 42 \
+    --default_max_new_tokens 150 \
+    --load_in_4bit
 EOT
