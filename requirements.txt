@@ -18,7 +18,7 @@ auto-gptq>=0.7.0     # For running GPTQ quantized models. Keep up-to-date for ne
 # optimum>=1.17.0    # For advanced model optimization, export to ONNX, and some specific hardware acceleration (e.com/NVIDIA/FasterTransformer).
                      # Also, some AutoGPTQ backends (like exllamav2) might leverage optimum.
 peft>=0.9.0          # Parameter-Efficient Fine-Tuning (LoRA, etc.), if you plan to fine-tune
-flash-attn          # Optional: For FlashAttention v1 on V100s. Install with --no-build-isolation.
+# flash-attn          # Optional: For FlashAttention v1 on V100s. Install with --no-build-isolation.
                      # Test carefully against 'sdpa'. Might not be necessary.
 # xformers           # Optional: Another library for optimized attention mechanisms.
                      # Was more critical before PyTorch 2.0's 'sdpa'. Can sometimes still offer benefits.
