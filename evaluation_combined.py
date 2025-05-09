@@ -18,7 +18,7 @@ import math
 import re
 import hashlib
 from collections import defaultdict
-from typing import List, Dict, Optional, Any, Set # Added Set
+from typing import List, Dict, Optional, Any, Set
 
 # --- Metric Libraries (with try-except for optional ones) ---
 try:
@@ -96,60 +96,38 @@ def post_process_model_output(raw_text: str, task_type: str,
         processed_text = re.sub(bp_pattern, "", processed_text, flags=re.IGNORECASE | re.DOTALL).strip()
     
     prompt_guidance_echoes = [
-        r"\(e\.g\., central control.*opening ideas\)\.",
-        r"opening ideas\)\.",
-        r"piece activation, opening ideas\)\.",
-        r"\d+ resulted in '[^']+'. Explain concisely.+position\.",
+        r"\(e\.g\., central control.*opening ideas\)\.", r"opening ideas\)\.",
+        r"piece activation, opening ideas\)\.", r"\d+ resulted in '[^']+'. Explain concisely.+position\.",
     ]
     for echo_pattern in prompt_guidance_echoes:
-        # Try to remove only if it's at the beginning after potential initial boilerplate
-        # that might have already been removed by the previous loop.
         temp_text_for_echo_check = processed_text 
         match = re.match(rf"^\s*{echo_pattern}\s*", temp_text_for_echo_check, re.IGNORECASE | re.DOTALL)
         if match:
             processed_text = temp_text_for_echo_check[match.end():].strip()
-            # Further clean any assistant tags that might appear after the echo
             processed_text = re.sub(r"^\s*\[assistant\]\s*", "", processed_text, flags=re.IGNORECASE).strip()
 
     task_type_lower = task_type.lower()
-
     if task_type_lower == "predict_move":
-        text_to_search = processed_text # Use the already partially cleaned text
-
-        # 1. Try to find a UCI move first (e.g., "e2e4", "a7a8q")
+        text_to_search = processed_text
         uci_candidates = re.findall(r"\b([a-h][1-8][a-h][1-8][qrnb]?)\b", text_to_search)
-        if uci_candidates:
-            return uci_candidates[0] # Return the first UCI candidate found
-
-        # 2. If no UCI, try to find a SAN move
-        # This regex is a best effort for common SAN patterns.
+        if uci_candidates: return uci_candidates[0]
         san_pattern = r"\b(?:[NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[NBRQ])?|O-O(?:-O)?)(?:[+#])?\b"
         san_candidates = re.findall(san_pattern, text_to_search)
-        if san_candidates:
-            return san_candidates[0] # Return the first plausible SAN candidate
-
-        # 3. Fallback: if LLM says "move is X" or similar patterns.
-        # Ensure the captured group is specific to move notations.
+        if san_candidates: return san_candidates[0]
         move_notation_capture = r"([a-h][1-8][a-h][1-8][qrnb]?|[NBRQK]?[a-h]?[1-8]?x?[a-h][1-8](?:=[NBRQK])?|O-O(?:-O)?)"
         patterns_with_move = [
             rf"(?:move is|next move is|plays|best move is|suggests|recommend|ответ:)\s*{move_notation_capture}\b",
-            rf"{move_notation_capture}\.\s*$", # Move followed by a period at end of string
+            rf"{move_notation_capture}\.\s*$",
         ]
         for pattern_str in patterns_with_move:
             match = re.search(pattern_str, text_to_search, re.IGNORECASE)
-            if match and match.group(1): # Ensure a group was captured
-                return match.group(1)
-
-        # 4. Original fallback: first word if it's short and potentially a move.
+            if match and match.group(1): return match.group(1)
         first_word = text_to_search.split(" ")[0]
-        if first_word:
-            if re.fullmatch(r"[a-h][1-8][a-h][1-8][qrnb]?", first_word) or \
-               re.fullmatch(san_pattern, first_word) or \
-               (len(first_word) >= 2 and len(first_word) <= 7): # General heuristic for chess moves
-                return first_word
-        
-        return "" # Return empty if no plausible move found by any method
-
+        if first_word and (re.fullmatch(r"[a-h][1-8][a-h][1-8][qrnb]?", first_word) or \
+                           re.fullmatch(san_pattern, first_word) or \
+                           (len(first_word) >= 2 and len(first_word) <= 7)):
+            return first_word
+        return ""
     elif task_type_lower == "identify_piece":
         piece_match = re.search(r"\b([pnbrqkPNBRQK])\b", processed_text)
         if not piece_match and processed_text and processed_text[0] in "pnbrqkPNBRQK": piece_match = re.match(r"([pnbrqkPNBRQK])", processed_text)
@@ -175,7 +153,6 @@ def post_process_model_output(raw_text: str, task_type: str,
         if sentences and sentences[0]: processed_text = " ".join(sentences[:max_sentences])
         else: processed_text = ""
         if processed_text and processed_text[-1] not in ".!?": processed_text += "."
-    
     processed_text = re.sub(r'\s\s+', ' ', processed_text).strip()
     processed_text = processed_text.replace("\n", " ").strip()
     if processed_text.lower().startswith("[assistant]"): processed_text = processed_text[len("[assistant]"):].strip()
@@ -186,12 +163,12 @@ def parse_task_subtype_from_id(task_id: str) -> str:
     parts = task_id.split('_')
     if len(parts) >= 4 and (parts[3].lower() == "p2" or parts[3].lower().startswith("p2.")):
         return "_".join(parts[3:])
-    elif len(parts) >= 4:
-         return parts[3]
+    elif len(parts) >= 4: return parts[3]
     return "unknown_subtype"
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate model on chess tasks with inference caching.")
+    parser = argparse.ArgumentParser(description="Evaluate model on chess tasks.")
+    # ... (all argparse arguments remain the same as your last provided script)
     parser.add_argument("--model_name", type=str, required=True, choices=MODEL_CONFIGS.keys())
     parser.add_argument("--base_model_cache_dir", type=str, default="./hf_cache")
     parser.add_argument("--phase1_lora_path", type=str, default=None)
@@ -223,6 +200,7 @@ def main():
     args = parser.parse_args()
     set_seed(args.seed)
 
+    # ... (Validation and library availability checks - same as before) ...
     if not args.test_file and not args.explanation_test_folder: parser.error("Must provide --test_file or --explanation_test_folder.")
     if args.eval_move_pred and not args.stockfish_path: parser.error("--eval_move_pred requires --stockfish_path.")
     if args.eval_explanation:
@@ -230,9 +208,10 @@ def main():
         if not ROUGE_SCORE_AVAILABLE: print("Warning: --eval_explanation active but `rouge-score` not found. ROUGE metrics skipped. `pip install rouge-score`")
         if not NLTK_AVAILABLE: print("Warning: --eval_explanation active but `nltk` not found. BLEU/Distinct-N metrics skipped. `pip install nltk`")
         if not LEVENSHTEIN_AVAILABLE: print("Warning: --eval_explanation active but `Levenshtein` not found. Edit Distance metrics skipped. `pip install python-Levenshtein`")
-
     if args.inference_cache_folder: os.makedirs(args.inference_cache_folder, exist_ok=True); print(f"Using inference cache: {args.inference_cache_folder}")
 
+
+    # ... (Device, Tokenizer, Model, Adapter loading - same as before) ...
     DEVICE = "cuda" if torch.cuda.is_available() else "cpu"; print(f"Using device: {DEVICE}")
     model_config_details = MODEL_CONFIGS[args.model_name]; hf_model_name = model_config_details["hf_model_name"]
     print(f"Loading tokenizer for {hf_model_name}..."); tokenizer = AutoTokenizer.from_pretrained(hf_model_name, cache_dir=args.base_model_cache_dir, use_fast=True, trust_remote_code=True)
@@ -242,7 +221,6 @@ def main():
     print(f"Loading base model: {hf_model_name}..."); model = AutoModelForCausalLM.from_pretrained(hf_model_name, cache_dir=args.base_model_cache_dir, quantization_config=quant_config, torch_dtype=torch.bfloat16 if quant_config else torch.float16, device_map="auto", trust_remote_code=True)
     if model.config.pad_token_id is None: model.config.pad_token_id = tokenizer.pad_token_id
     model.eval(); print("Base model loaded.")
-
     p1_loaded_successfully = False
     if args.phase1_lora_path:
         print(f"Loading phase 1 LoRA adapter from: {args.phase1_lora_path}...")
@@ -252,7 +230,6 @@ def main():
             else: model.load_adapter(args.phase1_lora_path, adapter_name=args.phase1_adapter_name)
             p1_loaded_successfully = True; print(f"Phase 1 adapter '{args.phase1_adapter_name}' loaded.")
         except Exception as e: print(f"Error loading Phase 1 LoRA: {e}"); sys.exit(1)
-
     p2_loaded_successfully = False
     if args.phase2_lora_path:
         print(f"Loading phase 2 LoRA adapter from: {args.phase2_lora_path}...")
@@ -262,7 +239,6 @@ def main():
             else: model.load_adapter(args.phase2_lora_path, adapter_name=args.phase2_adapter_name)
             p2_loaded_successfully = True; print(f"Phase 2 adapter '{args.phase2_adapter_name}' loaded.")
         except Exception as e: print(f"Error loading Phase 2 LoRA: {e}"); sys.exit(1)
-
     if p1_loaded_successfully and p2_loaded_successfully:
         if not isinstance(model, PeftModel): print("Error: Model not PeftModel for weighted adapter."); sys.exit(1)
         combined_adapter_name = f"blend_{args.phase1_adapter_name}{args.alpha_p1_weight}_{args.phase2_adapter_name}{args.beta_p2_weight}".replace(".","_")
@@ -276,12 +252,12 @@ def main():
     elif p2_loaded_successfully and not p1_loaded_successfully: model.set_adapter(args.phase2_adapter_name); print(f"Set active adapter to Phase 2: {args.phase2_adapter_name}")
     elif not p1_loaded_successfully and not p2_loaded_successfully: print("No LoRA adapters loaded. Using base model.")
 
+    # ... (Stockfish init, Data loading, Inference Caching, Inference Loop - same as before) ...
     stockfish_engine = None
     if args.eval_move_pred and args.stockfish_path:
         try: stockfish_engine = chess.engine.SimpleEngine.popen_uci(args.stockfish_path); print(f"Stockfish initialized: {args.stockfish_path}")
         except Exception as e: print(f"Error initializing Stockfish: {e}. Move metrics skipped.")
     elif args.eval_move_pred: print("Stockfish path not provided. Move metrics skipped.")
-
     all_data_items_to_process = []
     if args.test_file:
         try:
@@ -291,7 +267,6 @@ def main():
             for item in p1_dataset: item['data_source'] = 'P1'; all_data_items_to_process.append(item)
             print(f"Loaded {len(p1_dataset)} samples from Phase 1 test file.")
         except Exception as e: print(f"Error loading P1 test file {args.test_file}: {e}")
-
     if args.explanation_test_folder:
         explanation_test_files = glob.glob(os.path.join(args.explanation_test_folder, "*.jsonl"))
         if explanation_test_files:
@@ -303,18 +278,19 @@ def main():
                 print(f"Loaded {len(p2_dataset_full)} samples from Phase 2 explanation folder.")
             except Exception as e: print(f"Error loading P2 data: {e}")
         else: print(f"Warning: No *.jsonl files found in {args.explanation_test_folder}")
-
     if not all_data_items_to_process: print("No samples loaded. Exiting."); sys.exit(0)
     random.shuffle(all_data_items_to_process); print(f"Total samples for evaluation: {len(all_data_items_to_process)}")
-
     results_per_sample = []; total_ssd_sum = 0.0; ssd_count = 0; top_k_correct = {k: 0 for k in args.top_k_agreement}; move_prediction_count = 0
     explanation_data_by_subtype = defaultdict(lambda: {"preds": [], "refs": []})
     accuracy_tasks_counts = defaultdict(lambda: {"correct": 0, "total": 0}); list_legal_metrics_agg = {"f1": 0.0, "prec": 0.0, "rec": 0.0, "count": 0}
+    # NEW accumulators for comparing LLM move to GT move
+    llm_better_than_gt_count = 0
+    deltas_llm_vs_gt_cp = []
+    comparison_with_gt_possible_count = 0
 
     prompts_for_inference = [item['input'] for item in all_data_items_to_process if 'input' in item]
     data_items_for_processing = [item for item in all_data_items_to_process if 'input' in item]
     generated_outputs_text = [None] * len(prompts_for_inference)
-
     if args.inference_cache_folder:
         print("Checking inference cache...")
         prompts_needing_inference = []; indices_needing_inference = []; cache_hits = 0
@@ -330,7 +306,6 @@ def main():
         print(f"Found {cache_hits} cached results. Running inference for {len(prompts_needing_inference)} prompts.")
     else:
         prompts_needing_inference = prompts_for_inference; indices_needing_inference = list(range(len(prompts_for_inference)))
-
     if prompts_needing_inference:
         num_inference_batches = (len(prompts_needing_inference) + args.batch_size - 1) // args.batch_size
         for i in tqdm(range(0, len(prompts_needing_inference), args.batch_size), desc="Model Inference", ncols=100, total=num_inference_batches):
@@ -366,127 +341,187 @@ def main():
         if is_explanation_task_flag and effective_task_type == "unknown_subtype": effective_task_type = "explanation_generic"
         
         model_processed_output = post_process_model_output(model_raw_output, effective_task_type, None, reference_output, is_explanation_task_flag)
-        current_result = {"task_id": task_id, "task_type": effective_task_type, "data_source": data_source, "input_prompt": input_prompt_str, "model_raw_output": model_raw_output, "model_processed_output": model_processed_output, "reference_output": reference_output, "is_correct": None, "list_f1": None, "list_precision": None, "list_recall": None}
+        current_result = {"task_id": task_id, "task_type": effective_task_type, "data_source": data_source, "input_prompt": input_prompt_str, "model_raw_output": model_raw_output, "model_processed_output": model_processed_output, "reference_output": reference_output, 
+                          "is_correct_em": None, "is_correct_sf_top1": None, # For predict_move
+                          "list_f1": None, "list_precision": None, "list_recall": None, # For list_legal_moves
+                          "is_correct": None # General correctness for other P1 tasks
+                         }
+        # Add new per-sample fields for predict_move related metrics
+        current_result["eval_after_gt_move_cp"] = None
+        current_result["eval_llm_move_cp"] = None
+        current_result["delta_llm_vs_gt_cp"] = None
+        current_result["llm_better_than_gt"] = None
 
-        if args.eval_move_pred and stockfish_engine and effective_task_type == "predict_move" and data_source == 'P1':
-            move_prediction_count += 1
-            fen_match = re.search(r"\[FEN\]\s*(.*?)\s*\[SEP\]", input_prompt_str)
-            if fen_match:
-                fen = fen_match.group(1).strip()
-                try:
-                    board = chess.Board(fen)
-                    predicted_move_str = model_processed_output # This is the string from improved post_process_model_output
-                    model_move_obj = None
-                    processed_uci_for_top_k = "" # Store UCI for Top-K comparison
 
-                    # Try parsing as UCI first
-                    try:
-                        model_move_obj = board.parse_uci(predicted_move_str)
-                        if model_move_obj not in board.legal_moves: model_move_obj = None
-                        else: processed_uci_for_top_k = model_move_obj.uci()
-                    except ValueError: # Not a valid UCI string or format error
-                        # Try parsing as SAN if UCI fails
-                        try:
-                            model_move_obj = board.parse_san(predicted_move_str) # parse_san checks legality
-                            processed_uci_for_top_k = model_move_obj.uci()
-                        except (ValueError, chess.IllegalMoveError, chess.AmbiguousMoveError, chess.InvalidMoveError):
-                            model_move_obj = None # Invalid SAN or illegal/ambiguous
-
-                    sf_analysis = get_stockfish_analysis(board, stockfish_engine, time_limit=args.stockfish_analysis_time, multipv=max(args.top_k_agreement))
-                    if sf_analysis["top_moves_uci"]:
-                        sf_best_move_uci = sf_analysis["top_moves_uci"][0]
-                        sf_eval_after_sf_best_cp = sf_analysis["scores_cp_after_move"][0] if sf_analysis["scores_cp_after_move"] and len(sf_analysis["scores_cp_after_move"]) > 0 else None
-                        current_result["stockfish_top1_uci"] = sf_best_move_uci
-                        current_result["stockfish_top1_eval_cp"] = sf_eval_after_sf_best_cp
-
-                        if model_move_obj: # Only if model's move was successfully parsed and legal
-                            board_after_model_move = board.copy(); board_after_model_move.push(model_move_obj)
-                            info_after_model_move = stockfish_engine.analyse(board_after_model_move, chess.engine.Limit(time=args.stockfish_analysis_time))
-                            eval_after_model_move_cp = info_after_model_move.get("score").white().score(mate_score=10000) if info_after_model_move.get("score") else None
-                            if sf_eval_after_sf_best_cp is not None and eval_after_model_move_cp is not None:
-                                ssd = (sf_eval_after_sf_best_cp - eval_after_model_move_cp) if board.turn == chess.WHITE else (eval_after_model_move_cp - sf_eval_after_sf_best_cp)
-                                current_result["ssd_cp"] = ssd; total_ssd_sum += ssd; ssd_count += 1
-                        
-                        # Top-K agreement uses the processed_uci_for_top_k if parsing was successful,
-                        # otherwise it uses the raw model_processed_output (less reliable).
-                        # For consistency, let's always try to use a parsed UCI if available for Top-K.
-                        # If model_move_obj was successfully parsed, processed_uci_for_top_k will be its UCI.
-                        # If not, predicted_move_str (from post_process) is the best guess.
-                        # However, predicted_uci for top-K in original code used model_processed_output directly.
-                        # Let's stick to original top-K logic for now to see if extraction helps there first.
-                        # The `predicted_uci` for top-K in the original code was simply `model_processed_output`.
-                        # We should use `processed_uci_for_top_k` if it's valid, otherwise the best extracted string.
-                        # For now, using `model_processed_output` for top-k as per original logic to isolate extraction impact first.
-                        # If `model_move_obj` is not None, then `processed_uci_for_top_k` is the one to use for agreement.
-                        # Otherwise, the `model_processed_output` (which might be SAN or junk) is less ideal.
-                        # Let's use the UCI of the successfully parsed legal move for Top-K.
-                        # If no legal move parsed, then Top-K against raw output is unlikely to match anyway if it's not UCI.
-                        
-                        # Using the UCI of the successfully parsed legal move for Top-K agreement
-                        # If no legal move was parsed, model_move_obj is None, processed_uci_for_top_k is ""
-                        # In such case, Top-K agreement will likely be 0 unless the raw output was a UCI by chance.
-                        # Let's refine this: Top-K should ideally check against the *intended* move string from post-processing,
-                        # assuming post-processing gives UCI or something close.
-                        # For now, let's keep `model_processed_output` for Top-K as the direct output of the refined extractor.
-                        # This needs careful thought: if extractor returns SAN "Nf3", and stockfish UCI is "g1f3", direct comparison fails.
-                        # The most robust Top-K needs `processed_uci_for_top_k` derived from a successful SAN/UCI parse.
-
-                        uci_to_check_for_top_k = processed_uci_for_top_k if processed_uci_for_top_k else model_processed_output
-
-                        for k_val in args.top_k_agreement:
-                            is_in_top_k = uci_to_check_for_top_k in sf_analysis["top_moves_uci"][:k_val]
-                            current_result[f"in_top_{k_val}"] = is_in_top_k
-                            if is_in_top_k: top_k_correct[k_val] += 1
-                except Exception as e_sf: current_result["ssd_cp"] = f"SF_Error: {type(e_sf).__name__} - {e_sf}"
-        
-        elif args.eval_rule_tasks and data_source == 'P1':
-            accuracy_tasks_counts[effective_task_type]["total"] += 1; correct = False
-            # Always calculate Exact Match for predict_move if eval_rule_tasks is on
+        # --- P1 Task Evaluation ---
+        if data_source == 'P1':
             if effective_task_type == "predict_move":
-                 if reference_output is not None:
-                     # If Stockfish eval is also on, model_move_obj might exist.
-                     # For EM, we compare the processed output (could be SAN or UCI) against reference UCI.
-                     # This might need adjustment if reference is UCI and output is SAN.
-                     # For now, assume reference_output for predict_move is UCI.
-                     # If model_processed_output is SAN, this EM will fail unless it's identical to ref.
-                     # This part may need to ensure model_processed_output is also UCI for fair EM if ref is UCI.
-                     # For now, direct comparison:
-                     correct = (model_processed_output == reference_output)
-            elif effective_task_type in ["identify_piece", "identify_color", "is_square_attacked", "can_piece_move", "extract_comment_best_move", "parse_comment_mate_unavoidable"]:
-                 if reference_output is not None: correct = (model_processed_output.lower() == str(reference_output).lower())
-            elif effective_task_type == "list_legal_moves":
-                 if reference_output is not None:
-                    ref_moves = set(str(reference_output).split()) if reference_output else set(); pred_moves = set(model_processed_output.split()) if model_processed_output else set()
-                    if not pred_moves and not ref_moves: correct = True; precision = 1.0; recall = 1.0; f1 = 1.0
-                    elif pred_moves or ref_moves:
-                        intersect_count = len(ref_moves.intersection(pred_moves)); precision = intersect_count / len(pred_moves) if len(pred_moves) > 0 else 0.0; recall = intersect_count / len(ref_moves) if len(ref_moves) > 0 else 0.0
-                        f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0; correct = math.isclose(f1, 1.0)
-                    else: precision, recall, f1 = 0.0, 0.0, 0.0; correct = False
-                    current_result["list_f1"]=round(f1,4); current_result["list_precision"]=round(precision,4); current_result["list_recall"]=round(recall,4)
-                    list_legal_metrics_agg["f1"]+=f1; list_legal_metrics_agg["prec"]+=precision; list_legal_metrics_agg["rec"]+=recall; list_legal_metrics_agg["count"]+=1
-            current_result["is_correct"] = correct # This will now be set for predict_move too if eval_rule_tasks is on
-            if correct: accuracy_tasks_counts[effective_task_type]["correct"] += 1
+                fen_match = re.search(r"\[FEN\]\s*(.*?)\s*\[SEP\]", input_prompt_str) # Used by both EM and SF paths
+                
+                # 1. Exact Match (EM) correctness for predict_move
+                if args.eval_rule_tasks and reference_output is not None:
+                    em_model_uci = None
+                    if fen_match: # Need board to parse SAN from model output for fair EM
+                        try:
+                            temp_board_for_em = chess.Board(fen_match.group(1).strip())
+                            try:
+                                em_move_obj_temp = temp_board_for_em.parse_uci(model_processed_output)
+                                if em_move_obj_temp in temp_board_for_em.legal_moves: em_model_uci = em_move_obj_temp.uci()
+                            except ValueError:
+                                try:
+                                    em_move_obj_temp = temp_board_for_em.parse_san(model_processed_output)
+                                    em_model_uci = em_move_obj_temp.uci()
+                                except: pass
+                        except Exception: pass # FEN parsing error
 
+                    is_em_correct = (em_model_uci == reference_output) if em_model_uci else (model_processed_output == reference_output)
+                    current_result["is_correct_em"] = is_em_correct
+                    accuracy_tasks_counts['predict_move_em']["total"] += 1
+                    if is_em_correct: accuracy_tasks_counts['predict_move_em']["correct"] += 1
+
+                # 2. Stockfish-based evaluations for predict_move
+                if args.eval_move_pred and stockfish_engine:
+                    move_prediction_count += 1 # Counts all attempts for SF related metrics
+                    if fen_match:
+                        fen_for_sf = fen_match.group(1).strip()
+                        try:
+                            board_for_sf = chess.Board(fen_for_sf)
+                            llm_move_obj, llm_move_uci = None, ""
+                            # Parse LLM's predicted move string
+                            try:
+                                llm_move_obj = board_for_sf.parse_uci(model_processed_output)
+                                if llm_move_obj not in board_for_sf.legal_moves: llm_move_obj = None
+                                else: llm_move_uci = llm_move_obj.uci()
+                            except ValueError:
+                                try:
+                                    llm_move_obj = board_for_sf.parse_san(model_processed_output)
+                                    llm_move_uci = llm_move_obj.uci()
+                                except: llm_move_obj = None
+                            
+                            sf_analysis = get_stockfish_analysis(board_for_sf, stockfish_engine, time_limit=args.stockfish_analysis_time, multipv=max(args.top_k_agreement))
+                            if sf_analysis["top_moves_uci"]:
+                                sf_top1_uci = sf_analysis["top_moves_uci"][0]
+                                eval_sf_top1_cp = sf_analysis["scores_cp_after_move"][0] if sf_analysis["scores_cp_after_move"] and len(sf_analysis["scores_cp_after_move"]) > 0 else None
+                                current_result["stockfish_top1_uci"] = sf_top1_uci
+                                current_result["stockfish_top1_eval_cp"] = eval_sf_top1_cp
+
+                                # SF Top-1 based correctness
+                                is_sf_top1 = (llm_move_uci == sf_top1_uci) if llm_move_uci else False
+                                current_result["is_correct_sf_top1"] = is_sf_top1
+                                accuracy_tasks_counts['predict_move_sf_top1']["total"] += 1 # Separate counter for this accuracy type
+                                if is_sf_top1: accuracy_tasks_counts['predict_move_sf_top1']["correct"] += 1
+                                
+                                # Top-K agreement rates
+                                for k_val in args.top_k_agreement:
+                                    is_in_k = (llm_move_uci in sf_analysis["top_moves_uci"][:k_val]) if llm_move_uci else False
+                                    current_result[f"in_top_{k_val}"] = is_in_k
+                                    if is_in_k: top_k_correct[k_val] += 1
+                                
+                                eval_llm_cp = None
+                                if llm_move_obj: # If LLM move is legal
+                                    board_after_llm = board_for_sf.copy(); board_after_llm.push(llm_move_obj)
+                                    info_llm = stockfish_engine.analyse(board_after_llm, chess.engine.Limit(time=args.stockfish_analysis_time))
+                                    eval_llm_cp = info_llm.get("score").white().score(mate_score=10000) if info_llm.get("score") else None
+                                    current_result["eval_llm_move_cp"] = eval_llm_cp
+                                    if eval_sf_top1_cp is not None and eval_llm_cp is not None: # SSD vs SF best
+                                        ssd = (eval_sf_top1_cp - eval_llm_cp) if board_for_sf.turn == chess.WHITE else (eval_llm_cp - eval_sf_top1_cp)
+                                        current_result["ssd_cp"] = ssd; total_ssd_sum += ssd; ssd_count += 1
+                                
+                                # New: Compare LLM move with Ground Truth move using Stockfish
+                                if reference_output: # reference_output is UCI of GT move
+                                    gt_move_obj = None
+                                    try: gt_move_obj = board_for_sf.parse_uci(reference_output)
+                                    except: pass # GT move should be valid from dataset
+
+                                    if gt_move_obj and gt_move_obj in board_for_sf.legal_moves:
+                                        board_after_gt = board_for_sf.copy(); board_after_gt.push(gt_move_obj)
+                                        info_gt = stockfish_engine.analyse(board_after_gt, chess.engine.Limit(time=args.stockfish_analysis_time))
+                                        eval_gt_cp = info_gt.get("score").white().score(mate_score=10000) if info_gt.get("score") else None
+                                        current_result["eval_after_gt_move_cp"] = eval_gt_cp
+
+                                        if eval_llm_cp is not None and eval_gt_cp is not None: # Requires LLM move to be legal & evaluable
+                                            comparison_with_gt_possible_count += 1
+                                            delta = eval_llm_cp - eval_gt_cp # White's POV
+                                            current_result["delta_llm_vs_gt_cp"] = delta
+                                            deltas_llm_vs_gt_cp.append(delta)
+                                            
+                                            llm_is_better_for_player = (eval_llm_cp > eval_gt_cp) if board_for_sf.turn == chess.WHITE else (eval_llm_cp < eval_gt_cp)
+                                            current_result["llm_better_than_gt"] = llm_is_better_for_player
+                                            if llm_is_better_for_player: llm_better_than_gt_count += 1
+                                    # else:
+                                        # print(f"Warning: GT move {reference_output} for task {task_id} is not legal or not parsable on board FEN: {fen_for_sf}")
+                        except Exception as e_sf_main: current_result["stockfish_error"] = f"SF_Main_Error: {type(e_sf_main).__name__} - {e_sf_main}"
+            
+            # Other P1 rule tasks (excluding predict_move as it's handled above)
+            elif args.eval_rule_tasks and effective_task_type != "predict_move":
+                accuracy_tasks_counts[effective_task_type]["total"] += 1; correct = False
+                if effective_task_type in ["identify_piece", "identify_color", "is_square_attacked", "can_piece_move", "extract_comment_best_move", "parse_comment_mate_unavoidable"]:
+                     if reference_output is not None: correct = (model_processed_output.lower() == str(reference_output).lower())
+                elif effective_task_type == "list_legal_moves":
+                     if reference_output is not None:
+                        ref_moves = set(str(reference_output).split()) if reference_output else set(); pred_moves = set(model_processed_output.split()) if model_processed_output else set()
+                        if not pred_moves and not ref_moves: correct = True; precision = 1.0; recall = 1.0; f1 = 1.0
+                        elif pred_moves or ref_moves:
+                            intersect_count = len(ref_moves.intersection(pred_moves)); precision = intersect_count / len(pred_moves) if len(pred_moves) > 0 else 0.0; recall = intersect_count / len(ref_moves) if len(ref_moves) > 0 else 0.0
+                            f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0; correct = math.isclose(f1, 1.0)
+                        else: precision, recall, f1 = 0.0, 0.0, 0.0; correct = False
+                        current_result["list_f1"]=round(f1,4); current_result["list_precision"]=round(precision,4); current_result["list_recall"]=round(recall,4)
+                        list_legal_metrics_agg["f1"]+=f1; list_legal_metrics_agg["prec"]+=precision; list_legal_metrics_agg["rec"]+=recall; list_legal_metrics_agg["count"]+=1
+                current_result["is_correct"] = correct # General correctness for these other P1 tasks
+                if correct: accuracy_tasks_counts[effective_task_type]["correct"] += 1
+        
+        # --- P2 Task Evaluation (Explanations) ---
         elif args.eval_explanation and data_source == 'P2' and reference_output is not None:
             subtype_for_grouping = parse_task_subtype_from_id(task_id)
             explanation_data_by_subtype[subtype_for_grouping]["preds"].append(model_processed_output)
             explanation_data_by_subtype[subtype_for_grouping]["refs"].append(reference_output)
+            
         results_per_sample.append(current_result)
 
+    # --- Aggregate and Report Metrics ---
     final_metrics = {}
-    if args.eval_move_pred:
+    if args.eval_move_pred: # Stockfish related metrics
         final_metrics["average_ssd_cp"] = round(total_ssd_sum / ssd_count, 2) if ssd_count > 0 else None
-        if move_prediction_count > 0: # move_prediction_count is incremented for every P1 predict_move sample if eval_move_pred is true
+        if move_prediction_count > 0: # Denominator for Top-K rates
             for k_val in args.top_k_agreement: final_metrics[f"top_{k_val}_agreement_rate"] = round(top_k_correct[k_val] / move_prediction_count, 4)
-    if args.eval_rule_tasks:
+        
+        # New metrics for LLM vs GT move
+        if comparison_with_gt_possible_count > 0:
+            final_metrics["llm_better_than_gt_rate"] = round(llm_better_than_gt_count / comparison_with_gt_possible_count, 4)
+            final_metrics["avg_delta_llm_vs_gt_cp"] = round(np.mean(deltas_llm_vs_gt_cp), 2)
+            final_metrics["median_delta_llm_vs_gt_cp"] = round(np.median(deltas_llm_vs_gt_cp), 2)
+            final_metrics["stddev_delta_llm_vs_gt_cp"] = round(np.std(deltas_llm_vs_gt_cp), 2)
+            final_metrics["min_delta_llm_vs_gt_cp"] = round(np.min(deltas_llm_vs_gt_cp), 2)
+            final_metrics["max_delta_llm_vs_gt_cp"] = round(np.max(deltas_llm_vs_gt_cp), 2)
+        else:
+            final_metrics["llm_better_than_gt_rate"] = None
+            # ... set other delta stats to None ...
+            final_metrics["avg_delta_llm_vs_gt_cp"] = None
+            final_metrics["median_delta_llm_vs_gt_cp"] = None
+            final_metrics["stddev_delta_llm_vs_gt_cp"] = None
+            final_metrics["min_delta_llm_vs_gt_cp"] = None
+            final_metrics["max_delta_llm_vs_gt_cp"] = None
+
+
+    if args.eval_rule_tasks: # This includes predict_move_em and predict_move_sf_top1 accuracies now
         for task_name, counts in accuracy_tasks_counts.items():
-            if counts["total"] > 0 and task_name != "list_legal_moves": final_metrics[f"{task_name}_accuracy"] = round(counts["correct"] / counts["total"], 4)
+            if counts["total"] > 0:
+                # For predict_move, we'll have 'predict_move_em' and 'predict_move_sf_top1'
+                # For other tasks, it's just 'task_name'
+                metric_name = f"{task_name}_accuracy" # e.g. predict_move_em_accuracy, identify_piece_accuracy
+                if task_name == "predict_move_sf_top1": # User wants this as the primary accuracy if SF is on
+                     metric_name = "predict_move_sf_top1_accuracy"
+
+                final_metrics[metric_name] = round(counts["correct"] / counts["total"], 4)
+
+        # list_legal_moves is handled separately as it's not a simple accuracy
         if list_legal_metrics_agg["count"] > 0:
             count = list_legal_metrics_agg["count"]
             final_metrics["list_legal_moves_f1_avg"] = round(list_legal_metrics_agg["f1"] / count, 4)
             final_metrics["list_legal_moves_precision_avg"] = round(list_legal_metrics_agg["prec"] / count, 4)
             final_metrics["list_legal_moves_recall_avg"] = round(list_legal_metrics_agg["rec"] / count, 4)
 
+    # ... (Explanation metrics calculation - same as before, using explanation_data_by_subtype) ...
     if args.eval_explanation:
         all_preds_for_overall_metrics = []
         all_refs_for_overall_metrics = []
@@ -514,7 +549,7 @@ def main():
                         tok_refs = [[r.split()] for r in subtype_refs]; tok_preds = [p.split() for p in subtype_preds]; sf = SmoothingFunction()
                         try: final_metrics[f"bleu_4_avg_{subtype}"] = round(corpus_bleu(tok_refs, tok_preds, weights=(0.25,0.25,0.25,0.25), smoothing_function=sf.method1), 4)
                         except ValueError: final_metrics[f"bleu_1_avg_{subtype}"] = round(corpus_bleu(tok_refs, tok_preds, weights=(1,0,0,0), smoothing_function=sf.method1), 4)
-                        except Exception: pass # Error already printed below
+                        except Exception: pass 
                     except Exception as e: print(f" Error BLEU subtype {subtype}: {e}")
                 if LEVENSHTEIN_AVAILABLE:
                     try:
@@ -539,7 +574,6 @@ def main():
                 try: final_metrics["bleu_4_overall"] = round(corpus_bleu(tok_refs_all, tok_preds_all, weights=(0.25,0.25,0.25,0.25), smoothing_function=sf.method1), 4)
                 except ValueError: final_metrics["bleu_1_overall"] = round(corpus_bleu(tok_refs_all, tok_preds_all, weights=(1,0,0,0), smoothing_function=sf.method1), 4)
                 except Exception as e_bleu_overall: final_metrics["bleu_score_overall_error"] = str(e_bleu_overall); print(f"Error Overall BLEU: {e_bleu_overall}")
-                
                 all_pred_tokens_flat = [token for pred_tokens_list in tok_preds_all for token in pred_tokens_list if token]
                 if all_pred_tokens_flat:
                     final_metrics["distinct_1_overall"] = round(len(set(all_pred_tokens_flat)) / len(all_pred_tokens_flat), 4)
@@ -552,11 +586,13 @@ def main():
                 except Exception as e: print(f"Error Overall EditDist: {e}")
         else: print("No explanation samples with references to calculate any explanation metrics.")
 
+
+    # --- Reporting & Saving (Console and Summary File) ---
+    # Console Output (remains largely the same, but new metrics will appear based on their keys)
     print("\n--- Aggregated Evaluation Metrics ---")
     if not final_metrics and not any(v.get('total',0) > 0 for v in accuracy_tasks_counts.values()): print("No metrics calculated.")
     else:
-        # ... (Console printing logic - slightly refined for subtype display)
-        print("-- Phase 1 Metrics (Move Pred / Rules) --")
+        print("-- Phase 1 Metrics (Move Pred / Rules / Stockfish) --")
         for metric, value in sorted(final_metrics.items()):
              is_exp_metric = any(metric.startswith(p) for p in ["bert_score_", "rouge_", "bleu_", "distinct_", "avg_norm_edit_distance_"])
              if not is_exp_metric: print(f"{metric.replace('_', ' ').title()}: {value if value is not None else 'N/A'}")
@@ -573,6 +609,7 @@ def main():
                  print(f"{disp_name}: {value if value is not None else 'N/A'}")
     print("\nFluency of explanations: Requires qualitative assessment.")
 
+    # Detailed JSON Results Output (remains the same)
     if args.output_results_file:
         output_dir = os.path.dirname(args.output_results_file);
         if output_dir and not os.path.exists(output_dir): os.makedirs(output_dir, exist_ok=True)
@@ -582,6 +619,7 @@ def main():
             print(f"Detailed results saved to {args.output_results_file}")
         except Exception as e: print(f"Error saving detailed results: {e}")
     
+    # Numerical Summary File Output (Updated as per your request for raw keys)
     if args.output_numerical_summary:
         numerical_summary_path = args.output_numerical_summary; summary_dir = os.path.dirname(numerical_summary_path)
         if summary_dir and not os.path.exists(summary_dir): os.makedirs(summary_dir, exist_ok=True)
@@ -595,13 +633,15 @@ def main():
                 f_summary.write(f"P2 Adapter: {args.phase2_lora_path if args.phase2_lora_path else 'N/A'}\n")
                 f_summary.write(f"Test Samples (P1 source): {p1_count}\n"); f_summary.write(f"Test Samples (P2 source): {p2_count}\n")
                 f_summary.write("\n--- Aggregated Metrics ---\n")
-                for metric, value in sorted(final_metrics.items()):
-                    f_summary.write(f"{metric}: {value if value is not None else 'N/A'}\n") # Raw keys for summary
+                for metric, value in sorted(final_metrics.items()): # Print raw keys and values
+                    f_summary.write(f"{metric}: {value if value is not None else 'N/A'}\n")
+                
                 f_summary.write("\n--- Rule-Based Task Counts (Correct/Total) ---\n")
                 for task_name, counts_dict in sorted(accuracy_tasks_counts.items()):
                      if counts_dict["total"] > 0:
                         correct_count = counts_dict["correct"]; total_count = counts_dict["total"]
-                        f_summary.write(f"{task_name.replace('_', ' ').title()}_counts: {correct_count}/{total_count}\n")
+                        # Using original task_name for keys here, which will include 'predict_move_em' or 'predict_move_sf_top1'
+                        f_summary.write(f"{task_name}_counts: {correct_count}/{total_count}\n")
             print(f"Numerical summary saved to {numerical_summary_path}")
         except Exception as e: print(f"Error saving numerical summary: {e}")
 
