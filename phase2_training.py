@@ -278,8 +278,8 @@ def main():
         print(f"Adding new LoRA adapter '{args.output_adapter_name}' for Phase 2 explanation training...")
         lora_config_phase2 = LoraConfig(r=args.lora_r, lora_alpha=args.lora_alpha, target_modules=target_modules_phase2, lora_dropout=args.lora_dropout, bias="none", task_type=TaskType.CAUSAL_LM)
         model.add_adapter(peft_config=lora_config_phase2, adapter_name=args.output_adapter_name)
-        model.active_adapters = ["phase1_move_predictor", args.output_adapter_name]
-        # model.set_adapter(args.output_adapter_name) # Set this new adapter as active and trainable
+        # model.active_adapters = ["phase1_move_predictor", args.output_adapter_name]
+        model.set_adapter(["phase1_move_predictor", args.output_adapter_name]) # Set this new adapter as active and trainable
         print(f"Phase 2 adapter '{args.output_adapter_name}' added. Active adapters set to: {model.active_adapters}.")
     else:
         print(f"No Phase 1 adapter provided. Training new LoRA adapter '{args.output_adapter_name}' directly on base model for Phase 2 task.")
