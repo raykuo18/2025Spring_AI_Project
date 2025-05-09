@@ -35,10 +35,10 @@ python phase2_training.py \
     --val_folder training_data/phase2_corrected/val/ \
     --test_folder training_data/phase2_corrected/test/ \
     --tokenized_data_path training_data/phase2/ \
-    --output_dir ./training_output/tinyllama_phase2_explainer_scratch \
+    --output_dir ./training_output/tinyllama_phase2_explainer_scratch_v2 \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
-    --num_train_epochs 3 \
+    --num_train_epochs 10 \
     --per_device_train_batch_size 4 \
     --per_device_eval_batch_size 4 \
     --gradient_accumulation_steps 4 \
@@ -53,13 +53,13 @@ python phase2_training.py \
     --logging_steps 10 \
     --save_steps 100 \
     --eval_steps 50 \
-    --save_total_limit 10 \
+    --save_total_limit 5 \
     --report_to "tensorboard" \
     --seed 42 \
     --load_in_4bit \
-    --max_train_samples 4000 \
-    --max_val_samples 100 \
-    --max_test_samples 100 \
+    --max_train_samples 10000 \
+    --max_val_samples 200 \
+    --max_test_samples 200 \
     --gradient_checkpointing 
     # --gradient_checkpointing_use_reentrant False # This is already the default in the script's argparse
     # --vram_log_multiplier 1 # Optional: To control VRAM logging frequency relative to logging_steps. Default is 1.
