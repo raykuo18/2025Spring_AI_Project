@@ -56,7 +56,6 @@ python phase1_training.py \
     --save_total_limit 3 \
     --report_to "tensorboard" \
     --seed 42 \
-    # --load_in_4bit \
     --max_train_samples 60000 \
     --max_val_samples 500 \
     --max_test_samples 500 \
