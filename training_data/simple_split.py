@@ -6,6 +6,7 @@ import argparse
 import os
 import math
 from tqdm import tqdm # Optional: for progress reading large JSONL
+import sys
 
 def write_output(filename: str, games: list, is_jsonl: bool):
     """Writes a list of games to a JSON or JSONL file."""

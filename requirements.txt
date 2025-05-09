@@ -35,6 +35,7 @@ rouge-score          # For ROUGE evaluation metric (summarization, etc.)
 bert-score           # For BERTScore evaluation metric (semantic similarity)
 sentence-transformers # For generating sentence embeddings
 tqdm                 # For progress bars, very useful
+python-Levenshtein
 
 # --- Data Handling ---
 pandas               # For data manipulation and analysis (DataFrames)
