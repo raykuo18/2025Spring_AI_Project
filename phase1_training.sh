@@ -35,12 +35,12 @@ python phase1_training.py \
     --val_file training_data/phase1/val.jsonl \
     --test_file training_data/phase1/test.jsonl \
     --tokenized_data_path training_data/phase1 \
-    --output_dir ./training_output/tinyllama_phase1 \
+    --output_dir ./training_output/tinyllama_phase1_v2 \
     --base_model_cache_dir ./hf_cache \
     --max_seq_length 1024 \
     --num_train_epochs 3 \
-    --per_device_train_batch_size 4 \
-    --per_device_eval_batch_size 4 \
+    --per_device_train_batch_size 64 \
+    --per_device_eval_batch_size 128 \
     --gradient_accumulation_steps 4 \
     --learning_rate 2e-4 \
     --weight_decay 0.01 \
@@ -56,7 +56,7 @@ python phase1_training.py \
     --save_total_limit 3 \
     --report_to "tensorboard" \
     --seed 42 \
-    --load_in_4bit \
+    # --load_in_4bit \
     --max_train_samples 1000000 \
     --max_val_samples 500 \
     --max_test_samples 500 \
