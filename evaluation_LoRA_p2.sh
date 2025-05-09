@@ -34,8 +34,8 @@ python evaluation.py \
     --test_file training_data/phase1/test.jsonl \
     --explanation_test_folder training_data/phase2_corrected/test \
     --stockfish_path ../stockfish-11-linux/Linux/stockfish_20011801_x64 \
-    --output_results_file ./evaluation_results/phase2_explainer_lora/result.json \
-    --output_numerical_summary ./evaluation_results/phase2_explainer_lora/summary.txt \
+    --output_results_file ./evaluation_results/phase2_explainer_lora_10000/result.json \
+    --output_numerical_summary ./evaluation_results/phase2_explainer_lora_10000/summary.txt \
     --inference_cache_folder ./evaluation_results/inference_cache \
     --base_model_cache_dir ./hf_cache \
     --max_p1_eval_samples 10000 \
