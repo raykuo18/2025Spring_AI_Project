@@ -24,7 +24,7 @@ elif [ "$VERSION" = "v3" ]; then
     PATH2="checkpoints/"
 elif [ "$VERSION" = "v3_test" ]; then
     PATH1="checkpoints/phase1_conti_final"
-    PATH2="checkpoints/checkpoints/phase2_corrected-2200"
+    PATH2="checkpoints/phase2_corrected-2200"
 else
     echo "Unknown version: $VERSION"
 fi
