@@ -10,6 +10,8 @@ NUM_GPUS=$1
 VERSION=$2
 ALPHA=$3
 BETA=$4
+P1_SAMPLES=$5
+P2_SAMPLES=$6
 
 if [ "$VERSION" = "v1" ]; then
     PATH1="checkpoints/phase1_conti_checkpoint-10000"
@@ -60,8 +62,8 @@ python evaluation_combined.py \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
     --stockfish_analysis_time 0.3 \
     --top_k_agreement 1 3 5 10 50 100 \
-    --max_p1_eval_samples 10000 \
-    --max_p2_eval_samples 1000 \
+    --max_p1_eval_samples ${P1_SAMPLES} \
+    --max_p2_eval_samples ${P2_SAMPLES} \
     --output_results_file ./evaluation_results/combined_${VERSION}_${ALPHA}_${BETA}/result.json \
     --output_numerical_summary ./evaluation_results/combined_${VERSION}_${ALPHA}_${BETA}/summary.txt \
     --inference_cache_folder ./evaluation_results/inference_cache_combined_${VERSION}_${ALPHA}_${BETA} \
