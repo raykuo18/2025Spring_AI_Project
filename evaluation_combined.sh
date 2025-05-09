@@ -68,6 +68,7 @@ python evaluation_combined.py \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
     --stockfish_analysis_time 0.3 \
     --top_k_agreement 1 3 5 10 20 30 40 50\
+    --sf_reference_ks 1 3 5 10 30 50 \
     --max_p1_eval_samples ${P1_SAMPLES} \
     --max_p2_eval_samples ${P2_SAMPLES} \
     --output_results_file ./evaluation_results/combined_${VERSION}_${ALPHA}_${BETA}/result.json \
