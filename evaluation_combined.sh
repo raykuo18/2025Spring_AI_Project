@@ -17,8 +17,8 @@ if [ "$VERSION" = "v1" ]; then
     PATH1="checkpoints/phase1_conti_checkpoint-10000"
     PATH2="checkpoints/phase2_from_1000"
 elif [ "$VERSION" = "v2" ]; then
-    PATH1="checkpoints/phase1_conti_final"
-    PATH2="checkpoints/phase2_from_conti_final-800"
+    PATH1="checkpoints/phase2_from_conti_final-800/phase1_move_predictor/"
+    PATH2="checkpoints/phase2_from_conti_final-800/phase2_explainer_lora/"
 else
     echo "Unknown version: $VERSION"
 fi
