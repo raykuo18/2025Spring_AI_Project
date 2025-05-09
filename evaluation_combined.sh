@@ -20,8 +20,8 @@ elif [ "$VERSION" = "v2" ]; then
     PATH1="checkpoints/phase2_from_conti_final-800/phase1_move_predictor/"
     PATH2="checkpoints/phase2_from_conti_final-800/phase2_explainer_lora/"
 elif [ "$VERSION" = "v3" ]; then
-    PATH1="checkpoints/"
-    PATH2="checkpoints/"
+    PATH1="checkpoints/phase1_conti_final/"
+    PATH2="checkpoints/phase2_corrected-final/phase2_explainer_lora/"
 elif [ "$VERSION" = "v3_test" ]; then
     PATH1="checkpoints/phase2_corrected-2200/phase1_move_predictor"
     PATH2="checkpoints/phase2_corrected-2200/phase2_explainer_lora"
@@ -67,7 +67,7 @@ python evaluation_combined.py \
     --stockfish_path ../stockfish-11-linux/Linux/stockfish_20011801_x64 \
     --bert_score_model_type "microsoft/deberta-xlarge-mnli" \
     --stockfish_analysis_time 0.3 \
-    --top_k_agreement 1 3 5 10 50 100 \
+    --top_k_agreement 1 3 5 10 50 100 150 200 \
     --max_p1_eval_samples ${P1_SAMPLES} \
     --max_p2_eval_samples ${P2_SAMPLES} \
     --output_results_file ./evaluation_results/combined_${VERSION}_${ALPHA}_${BETA}/result.json \
