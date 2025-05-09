@@ -57,7 +57,7 @@ python phase1_training.py \
     --report_to "tensorboard" \
     --seed 42 \
     # --load_in_4bit \
-    --max_train_samples 1000000 \
+    --max_train_samples 600000 \
     --max_val_samples 500 \
     --max_test_samples 500 \
     --gradient_checkpointing 
