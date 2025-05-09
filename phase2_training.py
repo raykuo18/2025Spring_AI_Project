@@ -29,7 +29,6 @@ from peft import (
     prepare_model_for_kbit_training,
     TaskType
 )
-from peft.tuners.lora import ActiveAdapters
 
 # --- Model Configuration Mapping ---
 MODEL_CONFIGS = {
@@ -279,8 +278,13 @@ def main():
         print(f"Adding new LoRA adapter '{args.output_adapter_name}' for Phase 2 explanation training...")
         lora_config_phase2 = LoraConfig(r=args.lora_r, lora_alpha=args.lora_alpha, target_modules=target_modules_phase2, lora_dropout=args.lora_dropout, bias="none", task_type=TaskType.CAUSAL_LM)
         model.add_adapter(peft_config=lora_config_phase2, adapter_name=args.output_adapter_name)
-        # model.active_adapters = ["phase1_move_predictor", args.output_adapter_name]
-        model.set_adapter(ActiveAdapters(["phase1_move_predictor", args.output_adapter_name]))
+        combined_adapter_name = "combined_adapter"
+        model.add_weighted_adapter(
+                adapters=["phase1_move_predictor", args.output_adapter_name],
+                weights=[1.0, 1.0],
+                adapter_name=combined_adapter_name,
+                combination_type="linear"
+            )
         print(f"Phase 2 adapter '{args.output_adapter_name}' added. Active adapters set to: {model.active_adapters}.")
     else:
         print(f"No Phase 1 adapter provided. Training new LoRA adapter '{args.output_adapter_name}' directly on base model for Phase 2 task.")
