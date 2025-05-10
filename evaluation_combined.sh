@@ -13,21 +13,24 @@ BETA=$4
 P1_SAMPLES=$5
 P2_SAMPLES=$6
 
-if [ "$VERSION" = "v1" ]; then
-    PATH1="checkpoints/phase1_conti_checkpoint-10000"
-    PATH2="checkpoints/phase2_from_1000"
-elif [ "$VERSION" = "v2" ]; then
-    PATH1="checkpoints/phase2_from_conti_final-800/phase1_move_predictor/"
-    PATH2="checkpoints/phase2_from_conti_final-800/phase2_explainer_lora/"
-elif [ "$VERSION" = "v3" ]; then # our pipeline
-    PATH1="checkpoints/phase1_conti_final/"
-    PATH2="checkpoints/phase2_corrected-final/phase2_explainer_lora/"
-elif [ "$VERSION" = "v4" ]; then # seperate LoRA
-    PATH1="checkpoints/phase1_conti_final/"
-    PATH2="checkpoints/LoRA2_only_explainer_lora_v2/"
-else
-    echo "Unknown version: $VERSION"
-fi
+# if [ "$VERSION" = "v1" ]; then
+#     PATH1="checkpoints/phase1_conti_checkpoint-10000"
+#     PATH2="checkpoints/phase2_from_1000"
+# elif [ "$VERSION" = "v2" ]; then
+#     PATH1="checkpoints/phase2_from_conti_final-800/phase1_move_predictor/"
+#     PATH2="checkpoints/phase2_from_conti_final-800/phase2_explainer_lora/"
+# elif [ "$VERSION" = "v3" ]; then # our pipeline
+#     PATH1="checkpoints/phase1_conti_final/"
+#     PATH2="checkpoints/phase2_corrected-final/phase2_explainer_lora/"
+# elif [ "$VERSION" = "v4" ]; then # seperate LoRA
+#     PATH1="checkpoints/phase1_conti_final/"
+#     PATH2="checkpoints/LoRA2_only_explainer_lora_v2/"
+# else
+#     echo "Unknown version: $VERSION"
+# fi
+
+PATH1=training_output/tinyllama_phase2_from_LoRA_conti_final_corrected/TinyLLaMA_phase2_20250509_09023426/checkpoint-2340/phase1_move_predictor
+PATH2=training_output/tinyllama_phase2_from_LoRA_conti_final_corrected/TinyLLaMA_phase2_20250509_09023426/checkpoint-2340/phase2_explainer_lora
 
 echo "PATH1=${PATH1}"
 echo "PATH2=${PATH2}"
