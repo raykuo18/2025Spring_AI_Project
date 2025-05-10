@@ -29,6 +29,9 @@ else
     echo "Unknown version: $VERSION"
 fi
 
+echo "PATH1=${PATH1}"
+echo "PATH2=${PATH2}"
+
 sbatch <<EOT
 #!/bin/bash
 #SBATCH --job-name=test.job
