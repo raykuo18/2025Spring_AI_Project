@@ -35,7 +35,7 @@ Once downloaded, navigate to:
 cd src/gui
 ```
 
-NOTE: Prior to running, update the variable `local_LLM` with the absolute file path to the model. Unfortunately, this is hard-coded:
+NOTE: Prior to running, update the variable `local_LLM` in `llm_gui3.py` with the absolute file path to the model. Unfortunately, this is hard-coded:
 ```python
 local_LLM: str = (
         "/<path-to-repo>/src/models/capybarahermes-2.5-mistral-7b.Q4_K_M.gguf"
