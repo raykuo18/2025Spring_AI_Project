@@ -55,11 +55,7 @@ from math import atan2, cos, sin, pi
 #     main()
 
 # TODO:
-# - Use LLM to play a game, take inputs as UCI
-# - Board state: FEN
-# - start game from some state
-# - take UCI input to make a move
-# - take FEN stae input to start from some state
+# - Count number of legal/illegal moves
 #
 # - Inputs: user moves (model replace user), board state, stockfish (internal engine) moves
 # - Outputs: latest board state (after both user and stockfish moves)

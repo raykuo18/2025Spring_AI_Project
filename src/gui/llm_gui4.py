@@ -8,7 +8,10 @@ To run this example:
 import sys
 import chess
 import chess.engine
-from llama_cpp import Llama  # pip install llama-cpp-python
+
+# from llama_cpp import Llama  # pip install llama-cpp-python
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import random
 from PyQt5.QtWidgets import (
     QApplication,
@@ -21,6 +24,9 @@ from PyQt5.QtWidgets import (
     QPushButton,
     QTextEdit,
 )
+
+from peft import LoraConfig, get_peft_model, TaskType, PeftModel, PeftConfig
+
 from PyQt5.QtGui import QPainter, QPixmap, QColor, QPen
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtSvg import QSvgRenderer  # for rendering SVGs
@@ -55,11 +61,8 @@ from math import atan2, cos, sin, pi
 #     main()
 
 # TODO:
-# - Use LLM to play a game, take inputs as UCI
-# - Board state: FEN
-# - start game from some state
-# - take UCI input to make a move
-# - take FEN stae input to start from some state
+# - Load LLM from safetensors
+# - Count and print in QT window: number of legal/illegal moves
 #
 # - Inputs: user moves (model replace user), board state, stockfish (internal engine) moves
 # - Outputs: latest board state (after both user and stockfish moves)
@@ -67,7 +70,9 @@ from math import atan2, cos, sin, pi
 # - WARNING: Model training on synthetic may lead to model collapse
 
 # directory containing your SVGs
-SVG_DIR: str = "images/pieces-basic-svg"  # directory containing piece SVGs
+SVG_DIR: str = (
+    "/Users/adebayobraimah/Desktop/projects/2025Spring_AI_Project/src/gui/images/pieces-basic-svg"  # directory containing piece SVGs
+)
 SQUARE_SIZE: int = 60  # size of each square in pixels
 
 # map from chess piece letter to file-base name
@@ -82,6 +87,20 @@ PIECE_NAME: Dict[str, str] = {
 
 # this will hold QPixmaps keyed by piece.symbol()
 PIECE_IMAGES: Dict[str, str] = {}
+
+
+def get_device() -> torch.device:
+    """Returns the best available device: CUDA (NVIDIA GPU), MPS (Apple GPU), or CPU.
+
+    Returns:
+        Torch device
+    """
+    if torch.cuda.is_available():
+        return torch.device("cuda")
+    elif torch.backends.mps.is_available() and torch.backends.mps.is_built():
+        return torch.device("mps")
+    else:
+        return torch.device("cpu")
 
 
 class ChessBoardWidget(QWidget):
@@ -230,17 +249,57 @@ class MainWindow(QMainWindow):
         self.board = chess.Board()
         self.engine = chess.engine.SimpleEngine.popen_uci("stockfish")
 
+        self.legal_moves = 0
+        self.illegal_moves = 0
+
         # # initialize local quantized LLM
         # self.llm = Llama(
         #     model_path="/Users/adebayobraimah/Desktop/projects/2025Spring_AI_Project/src/models/capybarahermes-2.5-mistral-7b.Q4_K_M.gguf",
         #     n_threads=8,
         # )
 
-        # initialize local quantized LLM
-        self.llm = Llama(
-            model_path=local_LLM,
-            n_threads=8,
+        # # initialize local quantized LLM
+        # self.llm = Llama(
+        #     model_path=local_LLM,
+        #     n_threads=8,
+        # )
+
+        model_id = "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF"
+        gguf_file = "tinyllama-1.1b-chat-v1.0.Q6_K.gguf"
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_id,
+            gguf_file=gguf_file,
+            trust_remote_code=True,
         )
+
+        # self.tokenizer = self.tokenizer.to(get_device())
+        # self.tokenizer.pad_token_id = self.tokenizer.eos_token_id
+        self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        base_model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            gguf_file=gguf_file,
+            torch_dtype=torch.float16,
+            trust_remote_code=True,
+        ).eval()
+
+        print(f"🔁 Loading LoRA adapter from: {local_LLM}")
+        self.llm = PeftModel.from_pretrained(base_model, local_LLM).eval()
+
+        # # Assuming local_LLM is a directory containing the safetensors model and config
+        # self.tokenizer = AutoTokenizer.from_pretrained(local_LLM, local_files_only=True)
+        # self.llm = AutoModelForCausalLM.from_pretrained(
+        #     local_LLM,
+        #     trust_remote_code=True,
+        #     local_files_only=True,
+        #     use_safetensors=True,
+        #     torch_dtype="auto",
+        # )
+
+        # Put model in evaluation mode and move to available device
+        self.device = get_device()
+        self.llm = self.llm.to(self.device).eval()
 
         central = QWidget()
         grid = QGridLayout(central)
@@ -380,16 +439,41 @@ class MainWindow(QMainWindow):
             f"Position (FEN): {fen}\n"
             "Respond with your next move in UCI format (e.g. e2e4), and nothing else."
         )
-        resp = self.llm(prompt=prompt, max_tokens=8, stop=["\n"])
-        move_str = resp["choices"][0]["text"].strip()
+
+        input_ids = self.tokenizer(prompt, return_tensors="pt").input_ids.to(
+            self.device
+        )
+        output_ids = self.llm.generate(input_ids, max_new_tokens=8, do_sample=False)
+        decoded = self.tokenizer.decode(output_ids[0], skip_special_tokens=True)
+
+        move_str = decoded.strip()
         try:
             mv = chess.Move.from_uci(move_str)
             if mv in self.board.legal_moves:
+                self.legal_moves += 1
                 return mv
         except:
-            pass
+            self.illegal_moves += 1
         # fallback random move
         return random.choice(list(self.board.legal_moves))
+
+    @torch.no_grad()
+    def infer(self, prompt: str, max_new_tokens: int = 64) -> str:
+        # 1️⃣ Tokenise and put on the same device as the model
+        inputs = self.tokenizer(prompt, return_tensors="pt").to(self.device)
+
+        # 2️⃣ Autoregressive generation
+        out_ids = self.llm.generate(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            do_sample=False,  # greedy; change if you want sampling
+            eos_token_id=self.tokenizer.eos_token_id,
+            pad_token_id=self.tokenizer.pad_token_id,
+        )
+
+        # 3️⃣ Remove the prompt and decode
+        gen_ids = out_ids[0][inputs.input_ids.shape[-1] :]
+        return self.tokenizer.decode(gen_ids, skip_special_tokens=True).strip()
 
     def explain_move(self, move: chess.Move, player: str) -> str:
         """Use the LLM to explain why a given move is a good choice."""
@@ -398,7 +482,8 @@ class MainWindow(QMainWindow):
             f"You are a chess coach. Given the position FEN: {fen} "
             f"and the move {move.uci()} by {player}, explain in concise terms why this move is good."
         )
-        resp = self.llm(prompt=prompt, max_tokens=64, stop=["\n"])
+        # resp = self.llm(prompt=prompt, max_tokens=64, stop=["\n"])
+        resp = self.infer(prompt)
         return resp["choices"][0]["text"].strip()
 
     def play_llm_vs_stockfish(self) -> None:
@@ -484,7 +569,7 @@ if __name__ == "__main__":
 
     # Path to your local LLM model
     local_LLM: str = (
-        "/Users/adebayobraimah/Desktop/projects/2025Spring_AI_Project/src/models/capybarahermes-2.5-mistral-7b.Q4_K_M.gguf"
+        "/Users/adebayobraimah/Desktop/projects/2025Spring_AI_Project/src/models/final_lora_adapter"
     )
     mw = MainWindow(local_LLM=local_LLM)
     mw.show()
