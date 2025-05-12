@@ -3,7 +3,7 @@
 # Demo
 -------
 
-To run the demo, begin by setting up a new python env (follow the instructions in .dev/dev-README.md).
+To run the demo, begin by setting up a new python env (follow the instructions in [.dev/dev-README.md](.dev/dev-README.md)).
 
 After setting up the environment, install all of the required packages:
 
