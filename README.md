@@ -28,7 +28,7 @@ Now download the model used for the demo, by navigating to:
 cd src/models
 ```
 
-And executing the code from HuggingFace to download a quantized Mixtral model to run locally.
+And executing the code from HuggingFace in the `models.ipynb` Jupyter notebook to download a quantized Mixtral model to run locally.
 
 Once downloaded, navigate to:
 ```bash
